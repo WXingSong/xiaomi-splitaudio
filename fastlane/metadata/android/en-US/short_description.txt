@@ -1,1 +1,0 @@
-Keep music on Bluetooth and send every other app to the phone speaker (Shizuku)

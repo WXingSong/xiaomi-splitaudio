@@ -6,8 +6,9 @@
 
 - **Shell 路由守护进程（`route/AppRoute.java`）**：以 Android `shell` 用户（UID 2000）运行，由 Shizuku 或内置无线 ADB 客户端启动，用于获取 `MODIFY_AUDIO_ROUTING` 权限以注册系统级 `AudioPolicy` 和独立读写手机内置扬声器音量。
 - **临时文件部署（`/data/local/tmp`）**：应用仅向 `/data/local/tmp` 写入 `approute.dex`、`approute.sh`、`approute.ver`、`approute.music`、`approute.btfilter`、`approute.idle` 与 `approute.token`。包名与蓝牙配置在写入前均经过字符清洗与校验，脚本仅将其作为数据读取，不参与 shell 命令拼接；所有文件的信任边界与设备本身的 `shell` / Shizuku 权限一致。
-- **零无障碍权限与最小化悬浮窗权限**：本定制版已完全移除 `BIND_ACCESSIBILITY_SERVICE`，不读取屏幕内容、不拦截全局按键；`SYSTEM_ALERT_WINDOW` 仅用于在分流生效且用户按下实体音量键时，在侧边伴生展示无焦点（`FLAG_NOT_FOCUSABLE`）的系统风格手机喇叭音量滑块（不暂停视频，可在主界面随时关闭）。
-- **内置无线 ADB 客户端**：密钥对仅保存在应用私有存储目录（`android:allowBackup="false"`，禁止备份）；仅配对并连接本机 `adbd`。全程不执行 `pm grant`，通过「无线调试」完成一次底层激活后立即断开 ADB 连接（日常可手动关闭无线调试；Manifest 中保留的 `WRITE_SECURE_SETTINGS` 仅用于兼容旧版已手动授权设备，本应用不再主动申请）。
+- **零无障碍权限**：本定制版已彻底移除 `BIND_ACCESSIBILITY_SERVICE`，不读取屏幕内容、不监听全局按键事件。
+- **可选悬浮窗权限（`SYSTEM_ALERT_WINDOW`）**：仅用于「音量键伴生侧边手机喇叭音量条」（可随时在主界面关闭），窗口采用 `FLAG_NOT_FOCUSABLE`，仅在分流生效且亮屏解锁状态下响应系统媒体音量变更而滑出，关闭分流时随 `MonitorService` 停止彻底解绑。
+- **内置无线 ADB 客户端**：密钥对仅保存在应用私有存储目录（`android:allowBackup="false"`，禁止备份）；仅配对并连接本机 `adbd`，不强求开启「USB 调试（安全设置）」（`WRITE_SECURE_SETTINGS` 仅作旧版已授权设备的兼容保留）。
 - **100% 纯离线**：`INTERNET` 权限仅用于访问本机 `127.0.0.1:47821` 控制口与本机无线调试 `adbd`，应用本身不发起任何外部网络请求。
 
 ## 本机控制口（`127.0.0.1:47821`）
