@@ -1,202 +1,228 @@
-# SplitAudio — 藍牙只放音樂，其他 App 走手機喇叭 / Music on Bluetooth, everything else on the phone speaker
+# xiaomi-splitaudio
 
-<img src="fastlane/metadata/android/en-US/images/icon.png" width="112" align="right" alt="SplitAudio icon">
+<img src="app/src/main/res/mipmap-xxxhdpi/ic_launcher.png" width="96" align="right" alt="xiaomi-splitaudio icon">
 
-> **狀態：alpha（實驗版）。** 只在 Xiaomi 15（HyperOS 3、Android 16）實機驗證過。需要 Android 12 以上，**不需要 root**。
-> 兩個版本（見下面「兩個版本」）：F-Droid／GitHub 版要 [Shizuku](https://shizuku.rikka.app/)；Play 版有 Shizuku 就用，沒有就用內建的無線偵錯（不用另外裝 Shizuku）。
-> **Status: alpha.** Verified on one device only: Xiaomi 15 (HyperOS 3, Android 16). Needs Android 12 or newer, **no root**.
-> Two builds (see "Two builds" below): the F-Droid / GitHub build needs [Shizuku](https://shizuku.rikka.app/); the Play build uses Shizuku if it is there, otherwise its built-in Wireless debugging client (no Shizuku needed).
+**Android 蓝牙音频分流工具（以小米澎湃 OS 为参考深度调优，兼容多品牌 Android 13+ 手机）— 音乐 App 走蓝牙音箱（原生无损），刷视频等其他 App 走手机喇叭。**
 
-> ⭐ **好用的話，請按右上角的 Star 給個星星！** 這是我們知道有人在用、繼續維護下去的最大動力。
-> ⭐ **If this app is useful to you, please give it a Star (top-right).** It's how we know people use it, and it keeps the project going.
+> **基于开源项目二次开发声明 / Derived Work Notice**  
+> 本项目基于开源项目 **[monarchsofchaos004-gif/splitaudio](https://github.com/monarchsofchaos004-gif/splitaudio)**（MIT License）修改与深度定制，在完整保留原项目版权声明与 MIT 开源协议的前提下，围绕 **小米澎湃 OS（HyperOS 3 / Android 16）** 的日常场景进行了精简重构与体验增强。底层仍基于 AOSP 标准 `AudioPolicy` 框架实现，无小米私有 API 硬编码，同样适用于多数主流 Android 品牌手机。
 
-藍牙喇叭正在放 YouTube Music，你一打開 Facebook／IG／TikTok 滑影片，影片聲音也跟著跑到藍牙喇叭。
-Android 沒有「指定某個 App 從哪裡出聲」的設定（三星的「個別應用程式聲音」只有三星有）。
-SplitAudio 讓 **音樂 App 留在藍牙、其他所有 App 改走手機喇叭**。
+> **运行环境**：
+> - **参考实机**：已在 **Xiaomi 14 Ultra（HyperOS 3 / Android 16）** 实机验证；
+> - **系统版本**：最低支持 **Android 12（API 31）** 安装，**推荐 Android 13（API 33）及以上**以获得完整功能（Android 12 缺少 `VolumeInfo` 等系统 API，独立手机喇叭调音等功能会自动降级）；
+> - **权限与隐私**：**无需 Root**、**无需无障碍权限**、**100% 纯离线**。
 
-You are playing YouTube Music on a Bluetooth speaker, then open Facebook / Instagram / TikTok — and the video
-sound also goes to the speaker. Stock Android has no per-app output setting (Samsung's "Separate app sound" is
-Samsung-only). SplitAudio keeps **the music app on Bluetooth and sends every other app to the phone speaker**.
+---
 
-## 兩個版本 / Two builds
-同一份原始碼、兩個版本（Gradle product flavor）。Same source code, two builds (Gradle product flavors).
+## 解决什么痛点？
 
-| | **fdroid**（F-Droid／GitHub Releases） | **play**（Google Play，上架準備中 / in preparation） |
+手机连着客厅/桌面的蓝牙音箱正在用 QQ 音乐放歌，顺手打开小红书、抖音、B 站或微信刷一条短视频时，系统默认会把短视频声音也一起推送到蓝牙音箱，甚至直接把音乐顶掉。
+
+**xiaomi-splitaudio** 借助系统级 `AudioPolicy`（由 Shizuku 或内置无线 ADB 的 `shell` 权限注册）实现独立分流：
+- **指定音乐 App**（如 QQ 音乐、网易云音乐、YouTube Music 等）：**100% 保留在原生蓝牙 A2DP 通道播放**，零音质与音量损耗；
+- **其余所有 App**（小红书、抖音、B 站、微信视频号等）：媒体音频自动走**手机自带扬声器**；
+- 配合系统自带的**多应用同时发声功能**（如小米澎湃 OS「音助」、三星 Sound Assistant 等）或音乐 App 内置多播设置，边放无损蓝牙音乐、边用手机喇叭刷视频互不打扰。
+
+---
+
+## 核心特性
+
+### 1. 原生无损音质 & 固定扬声器分流
+- **音乐零接管**：常规播放状态下仅对非音乐 App 注册手机扬声器路由规则，不对音乐 App 施加任何 `AudioMix` 拦截或重采样，保持蓝牙音箱原生解码与动态范围。
+- **固定扬声器模式**：开启分流且目标蓝牙音箱已连接期间，非音乐 App 始终走手机喇叭，不因音乐暂停或切歌而切回蓝牙。
+
+### 2. 特定蓝牙音箱白名单 & 断开自动停服
+- 支持勾选指定 **1 台或多台蓝牙音箱**（按 MAC / 设备名精准匹配）；连接蓝牙耳机、车载蓝牙等非白名单设备时绝不误触发分流。
+- 目标音箱断开连接超过设定时间（默认 2 分钟，支持自定义 0～1440 分钟或关闭）后自动撤回规则、退出前台服务并让底层休眠待命。
+
+### 3. 澎湃 OS 风格音量键伴生浮条（不暂停视频）& 快捷磁贴小窗
+- **按音量键自动伴生手机喇叭音量条（推荐日常调音方式）**：
+  - 分流生效期间，按手机实体音量键调节蓝牙音箱时，系统侧边同步滑出一条贴合小米澎湃 OS 原生风格的**纯竖向圆角胶囊滑块**（无多余悬浮操作按键，自动适配深浅色模式与横竖屏）；
+  - 顶部等宽数字百分比 + 底部极简手机声波矢量图标，随澎湃蓝液位双层裁剪无缝反色，全高度上下顺滑拖曳 **0%～100%** 独立调节手机喇叭硬件音量，轻点底部图标一键静音/恢复；
+  - 采用无焦点悬浮窗（`FLAG_NOT_FOCUSABLE`），**弹出与拖动全程不暂停视频、不抢窗口焦点**，点空白处或松手 2.6 秒自动柔和淡出；
+  - 主界面支持自由选择 **右侧并排（默认，紧邻系统音量条）/ 左侧边缘 / 关闭** 并即时预览；仅在分流开启时由前台服务托管，关闭分流彻底解绑零后台残留。
+- **控制中心「音频分流」快捷磁贴**：
+  - **短按磁贴**：一键开启 / 停止分流；
+  - **长按磁贴**：弹出澎湃 OS 控制中心风格的毛玻璃小窗（实时显示蓝牙音箱状态、快捷开关分流、独立喇叭滑块及「更多设置」跳转主界面）。
+
+### 4. 通话与微信语音防串音
+- **运营商来电 / 通话**（`MODE_RINGTONE` / `MODE_IN_CALL`）：0.25 秒内自动撤回分流并暂停音乐，通话结束后自动续播。
+- **微信语音 / 视频通话**（`MODE_IN_COMMUNICATION`）：动态启用音乐 App 蓝牙锁定保护，并将通话/铃声用途排除在扬声器路由外、阻止通话通道落到白名单音箱，避免串音。
+
+### 5. 免 Root 无线调试激活 + 0 CPU 休眠待命
+- **Shizuku 优先，内置无线 ADB 兜底**：手机未装 Shizuku 时，通过内置四步引导开启**「无线调试」**即可完成配对与激活，不执行 `pm grant`。
+- **重启后仅需点火一次，日常无 Wi-Fi 秒开**：底层激活后即可直接关闭「无线调试」（隐藏系统调试通知）；日常关闭分流时底层路由进程进入 `Object.wait()` **0% CPU 休眠待命**，后续开关分流、改白名单与调音量全部通过本机控制口 `127.0.0.1:47821` 10ms 完成，**断 Wi-Fi 也能秒开**。
+- **重启后自动感知激活**：手机重启后，下拉控制中心点开一次系统自带的「无线调试」开发者图块，服务会自动感知开关变化并在约 2 秒内自动点火激活，成功后提示关回无线调试即可。
+- **自动版本指纹校验与热升级**：覆盖安装新版 APK 后自动比对运行中底层与内置 `approute.dex` / `approute.sh` 的 SHA-256 指纹；有 Shizuku 或无线调试条件时自动安全热替换升级，离线时保留旧引擎继续工作不中断。
+
+### 6. 极简零无障碍 & 100% 纯离线
+- **零无障碍权限**：不申请无障碍服务，不读取屏幕内容、不拦截全局按键；伴生手机音量浮条仅需一次性标准系统「悬浮窗（显示在其他应用上层）」权限，可按需在主界面关闭。
+- **100% 纯离线零外网通信**：彻底移除检查更新、诊断上报服务器、付费模块与多风味构建，无任何数据离开手机。
+
+---
+
+## 品牌与系统兼容性说明
+
+虽然本项目围绕小米澎湃 OS 进行了 UI 对齐与交互打磨，但核心分流引擎（`route/AppRoute.java`）与权限通道全部采用 **AOSP 标准接口**，并未绑定小米私有 API。实际能否在某台手机上获得完整体验，主要取决于三个条件：
+
+1. **Android 版本**：最低支持 **Android 12（API 31）** 安装；但独立手机喇叭音量读写（`VolumeInfo` / `IAudioService.getDeviceVolume`）、活跃蓝牙输出识别及快捷磁贴一键添加均依赖 **Android 13（API 33）及以上**（Android 12 机型仅可尝试核心分流，喇叭调音会自动降级隐藏）。
+2. **厂商对 `AudioPolicy` 的兼容度**：需系统允许 `shell`（UID 2000）注册 `AudioPolicy` 且底层音频策略正常遵循 `RULE_MATCH_UID` 规则。
+3. **系统或音乐 App 的「多应用同时发声」支持**：本定制版**不篡改系统全局 `multi_audio_focus_enabled`**，刷视频时不暂停蓝牙音乐需依靠系统自带声音助手（或音乐 App 自身的多播开关）。
+
+### 各品牌兼容度一览
+
+> 以下评估结合当前架构设计与同源底层 `AudioPolicy` 路由引擎的社区实测清单（[COMPATIBILITY.md](COMPATIBILITY.md)）整理。需注意 `COMPATIBILITY.md` 反映的是上游原版底层路由层实测，与本定制版在多焦点策略上存在差异。
+
+| 兼容梯队 | 手机品牌 / 系统 | 兼容程度与体验说明 |
 |---|---|---|
-| App id | `app.splitaudio` | `app.splitaudio.play` |
-| shell 權限怎麼來 / Shell access | [Shizuku](https://shizuku.rikka.app/) | Shizuku，沒有就用內建 ADB 無線偵錯 / Shizuku, otherwise the built-in ADB client (Wireless debugging, one-time pairing) |
-| 功能 / Features | 全部免費 / everything free | 簡單模式免費；自訂模式與每個 App 音量是 Pro（買斷，裝好有 7 天試用；購買功能之後的版本開放）/ Simple mode free; custom mode and per-app volume are Pro (one-time purchase, 7-day trial; purchasing comes in a later version) |
-| 音量鍵（無障礙服務）/ Volume keys (accessibility) | 有（Android 13 以上）/ yes (Android 13+) | 沒有 / no |
-| `INTERNET` 權限 / permission | 有，本機 `127.0.0.1` 的指令口，加上每天最多一次查 GitHub 有沒有新版（從 F-Droid 裝的不查）；沒有任何資料離開手機 / yes, the helper's local control port on `127.0.0.1` plus one GitHub releases query per day at most to look for a new version (skipped when installed by an F-Droid client); no data leaves the phone | 有，連這支手機自己的 adbd 和本機指令口，沒有任何資料離開手機 / yes, to reach this phone's own adbd and the local control port; no data leaves the phone |
+| **最佳兼容**<br>（开箱即用） | **小米 / Redmi / POCO**<br>HyperOS / MIUI（Android 13+） | **参考开发与主验证平台**。自带「音助（允许多个应用同时发声）」完美契合本项目设计；侧边伴生浮条默认间距按 HyperOS 系统音量条精准对齐。 |
+| **高度兼容**<br>（细节微调即可） | **OPPO / 一加（OnePlus）/ 真我（realme）**<br>ColorOS / OxygenOS / realme UI（Android 13+） | 多款机型实测底层可用，且免 `pm grant` 绕过了欧加系「禁止权限监控」门槛，系统多具备多应用发声/独立音量设置；但个别机型/系统版本在 `AudioPolicy` 上存在分化，无线调试快捷跳转可能回退到开发者选项需手动点入。 |
+| **高度兼容**<br>（有系统原生平替） | **三星（Samsung）**<br>One UI（Android 13+） | 多款 Galaxy A / S 机型底层实测通过，配合 Good Lock Sound Assistant 可实现多应用同时发声；不过 One UI 本身已内置官方「独立应用声音（Separate app sound）」，日常可直接优先使用系统原生方案。 |
+| **底层极稳，焦点受限** | **Google Pixel / 摩托罗拉（Motorola） / Nothing / Sony 等类原生 Android**<br>（Android 13+） | 最贴近 AOSP 标准，`AudioPolicy` 路由与无线调试成功率很高。**注意**：类原生系统通常缺少“声音助手”，若使用不带多播开关的播放器（如 Spotify、YouTube Music），刷视频时可能会暂停音乐；使用带「允许与其他应用同时播放」开关的播放器（如 QQ 音乐、网易云音乐）则可正常共存。 |
+| **部分兼容 / 机型分化** | **荣耀（HONOR，MagicOS）**<br>**华硕（ASUS） / 努比亚（nubia） / 传音（Infinix、TECNO）** | 均有实测可用机型（Android 14+），但荣耀 MagicOS 在不同机型/版本上音频策略差异较大，存在部分机型分流不生效的情况。 |
+| **理论可用，实测偏少** | **vivo / iQOO（OriginOS）**<br>**魅族（Flyme）**（Android 13+） | 基于 AOSP 且具备多应用媒体发声相关能力，架构层面无硬性阻碍，但目前实机确认样本较少，建议开启后实测验证。 |
+| **不兼容 / 极难兼容** | **华为鸿蒙 NEXT（HarmonyOS 5+）**<br>**华为 EMUI / HarmonyOS 2～4**<br>**Android 11 及以下 / iOS** | - **HarmonyOS NEXT**：已移除 Android 运行时，无法安装 APK。<br>- **EMUI / HarmonyOS 2～4**：底层多停留在 Android 10～12（低于 `minSdk 31` 或缺少 `VolumeInfo` 且底层音频/无线 ADB 限制较多），基本不可用。<br>- **Android 11 及以下 / iOS**：不支持。 |
 
-需求 / Requirements: Android 12（API 31）以上；音量鍵功能要 Android 13 以上（要讀系統的 VolumeInfo）。 Android 12 or newer; the volume keys need Android 13 or newer (they read the system's VolumeInfo).
+### 非小米手机使用时的自行调整建议
 
-## 功能 / What it does
-- 藍牙連著＋音樂 App 正在播 → 音樂 App 走藍牙，其他 App 全走手機喇叭。
-  While Bluetooth is connected and the music app is playing: music → Bluetooth, every other app → phone speaker.
-- 音樂停 15 秒或藍牙斷開 → 規則拿掉，一切恢復原狀。講電話（含網路電話）時也會先拿掉。
-- **別的 App 進入通話／語音對講**（例如監視器 App 按麥克風）：Android 這時會把媒體改送到聽筒，所以先暫停音樂，結束後自動續播。
-  While another app is in a call / voice chat (e.g. a camera app's talk button) Android sends media to the earpiece, so the music is paused and resumed afterwards.
-  Music stopped for 15 s, or Bluetooth gone → the rule is removed and audio behaves normally. Also removed during calls.
-- **音量鍵**（fdroid 版，Android 13 以上）：在走喇叭的 App 畫面按＝調手機喇叭（畫面提示「手機喇叭音量 xx%」）；在音樂 App／桌面按＝照常調藍牙。
-  音量一格多大是向系統問音量範圍算出來的（約 15 格），桌面 App 也是動態查的，不綁特定廠牌。
-  **Volume keys** (fdroid build, Android 13+): in a speaker-routed app they change the phone speaker volume; in the music app / home screen they change Bluetooth as usual.
-  The step size comes from the device's own volume range (about 15 steps) and the home screen app is looked up, so nothing is tied to one brand.
-- **開影片不打斷音樂**：Android 預設「別的 App 一開影片，音樂 App 就自己暫停」（播放權只給一個 App），光分流擋不住。
-  要靠 Android 內建的「多個 App 同時播放」（multi audio focus，Android 11 起內建、預設關）。**第一次分流時 App 會先問你**（通知＋主畫面一張卡：開啟／不要），
-  你同意才會打開，不會自己動系統設定；打開那一下音樂會停一秒，會自動按回播放。這是系統設定、重開機仍有效；來電、鬧鐘照樣會讓全部暫停。
-  之後隨時可以用主畫面的「開影片不打斷音樂」開關改；按過「不要」就不會再問、也不會自動打開。**移除 App 前想還原，先把開關關掉。**
-  **A video doesn't pause the music**: by default, when another app starts a video it takes the audio focus and the music
-  app pauses itself — routing alone can't stop that. It needs Android's built-in *multi audio focus* (Android 11+, off by default).
-  **The first time the split turns on, SplitAudio asks you** (a notification plus a card on the main screen: turn on / no thanks);
-  it only switches the system setting on after you agree. The music pauses for a second at that moment and is resumed
-  automatically. It is a system setting, so it survives reboot; calls and alarms still pause everything. You can change your mind
-  any time with the "videos don't pause the music" switch on the main screen; "no thanks" means it is never asked or switched on again.
-  **To restore the default before uninstalling, switch it off first.**
-- **按麥克風時不暫停音樂**（0.5，預設開）：用語音輸入（例如 Gboard 的麥克風）或叫語音助理時，Android 會讓音樂 App 自己暫停。
-  開著這個功能時，小程式一看到別的 App 搶走聲音，約 0.3 秒後就替音樂按播放，音樂只頓約半秒，麥克風照常能用。
-  只在「開影片不打斷音樂」（多重焦點）開著時有效——多重焦點下，音樂 App 重新要聲音不會把麥克風的聲音搶走，兩邊才能同時；通話／語音對講時照舊先暫停音樂。
-  **副作用：手機麥克風會收到喇叭放出來的音樂聲。** 主畫面的「按麥克風時不暫停音樂」開關可以關掉（關＝等麥克風用完才補播，跟以前一樣）。
-  **Pressing the mic doesn't pause the music** (0.5, on by default): voice typing (e.g. Gboard's mic) or an assistant makes the music app pause itself.
-  With this on, the helper sees another app take the sound and presses play about 0.3 s later, so the music only stalls for about half a second and the mic works as usual.
-  It only works while "videos don't pause the music" (multi audio focus) is on — with multi audio focus a music app asking for the sound again does not take it away from the mic,
-  so both can run at once; during calls / voice chats the music is still paused as before. **Side effect: the phone's microphone can pick up the music playing from the speaker.**
-  Switch it off with the "mic doesn't pause the music" switch on the main screen (off = the music is resumed after the mic is done, as before).
-- **故障安全**：路由小程式一旦結束，規則跟著消失＝全部回到藍牙，不會變成沒聲音。
-  **Fail-safe**: if the helper process dies, its rule dies with it — audio falls back to Bluetooth, never to silence.
+如果你在非小米品牌手机上使用本应用，可按需做以下调整以获得更佳体验：
 
-**音樂 App 自己選**：簡單模式下，主畫面按「選音樂 App」，在清單（只列有桌面圖示的 App）勾選，可多選、至少留一個；勾選的 App 留在藍牙，其他 App 走喇叭。
-預設是 YouTube Music（`com.google.android.apps.youtube.music`，以及 Morphe 修改版）。
-**Choose your music apps**: in Simple mode tap "Choose music apps" on the main screen and tick them (only apps with a launcher icon are listed; several are fine, at least one must stay ticked).
-The ticked apps stay on Bluetooth, everything else plays on the speaker. The default is YouTube Music (plus the Morphe-patched package).
+1. **解决“刷视频暂停蓝牙音乐”**：
+   - 在系统设置中开启对应品牌的**多应用同时发声 / 声音助手**功能（如三星 Good Lock Sound Assistant、欧加/vivo 系应用独立音量或多应用发声设置）；
+   - 同时在音乐 App 设置中开启**「允许与其他应用同时播放」**（QQ 音乐、网易云音乐等均内置该项）；
+   - 若为 Google Pixel 等无声音助手的类原生系统，且强依赖 Spotify / YouTube Music 同时播放，建议使用保留了系统全局多焦点开关的[原版 `splitaudio`](https://github.com/monarchsofchaos004-gif/splitaudio)。
+2. **调整伴生悬浮音量条位置**：
+   - 伴生浮条默认「右侧并排」是按 HyperOS 右侧音量条宽度调校的。若你的手机音量条在左侧，或与系统音量条略有重叠/间距不适，请在主界面点击 **「音量键伴生浮条」** 切换为 **「左侧边缘」** 或 **「关闭」**（关闭后仍可在主界面或长按控制中心磁贴独立调节手机喇叭音量）。
+3. **开发者选项与无线调试入口差异**：
+   - 应用内第一步的开启路径提示以小米系统为例，其他品牌请在「设置 → 关于手机」中按对应系统方式连续点击「版本号」开启开发者选项；
+   - 点击「打开无线调试」若未直达无线调试页，会自动回退至「开发者选项」，手动向下滑动找到「无线调试」进入即可（亦可直接安装并使用 [Shizuku](https://shizuku.rikka.app/) 跳过内置无线 ADB 配对）。
+4. **后台保活与通知权限**：
+   - 国产定制 ROM 建议在系统电池/应用管理中将本应用设为 **「无限制 / 允许后台高耗电 / 允许自启动」**，防止系统查杀 `MonitorService` 前台服务导致伴生音量浮条失灵或断开自动停服失效（底层 `AppRoute` 以 `shell` 独立运行，一般不易被杀）。
+5. **防止通话/语音串音**：
+   - 无论什么品牌，均建议在系统蓝牙设置中关闭目标白名单音箱的 **「通话音频」** 开关，避免来电或微信语音落入音箱。
 
-## 自訂模式 / Custom mode (0.3)
-> **只在 Xiaomi 15（HyperOS 3、Android 16）實機驗證過。** Only verified on a Xiaomi 15 (HyperOS 3, Android 16).
+---
 
-- 打開「自訂模式」→「選每個 App 的輸出」：每個 App 可以選 **預設（跟系統）／手機喇叭／藍牙／有線或 USB 耳機**。
-  Turn on "Custom mode" → "Choose output for each app": every app can play on **Default (follow the system) / Phone
-  speaker / Bluetooth / Wired or USB headphones** — like Samsung's "Separate app sound", on any phone with Shizuku (or the Play build's built-in ADB).
-- 選的裝置沒連著時，那個 App 就跟系統走（不會沒聲音）；講電話時規則先拿掉。
-  If the chosen device isn't connected, that app follows the system (never silence). The rule is removed during calls.
-- 只列有桌面圖示的 App（不需要「讀取所有 App 清單」權限）。
-  Only apps with a launcher icon are listed (no "query all packages" permission).
-- 簡單模式（音樂 App 走藍牙、其他走喇叭）仍是預設，升級後行為不變。
-  Simple mode (music app on Bluetooth, everything else on the speaker) stays the default, so upgrading changes nothing.
-- 原理同下：App 把設定寫成 `/data/local/tmp/approute.pkgmap`，`approute.sh startmap` 換成 uid 後起 `AppRoute map`，
-  每種輸出各一組 RENDER 規則。
-  Same mechanism as below: the app writes `/data/local/tmp/approute.pkgmap`, `approute.sh startmap` turns package names
-  into uids and starts `AppRoute map`, which registers one set of RENDER mixes per output device.
+## 与原版开源项目（[splitaudio](https://github.com/monarchsofchaos004-gif/splitaudio)）的主要区别
 
-## 每個 App 分開調音量 / Volume for each app (0.4)
-> **只在 Xiaomi 15（HyperOS 3、Android 16）實機驗證過。** Only verified on a Xiaomi 15 (HyperOS 3, Android 16).
+本定制版并非简单换皮，而是在原版核心 `AudioPolicy` 路由思路之上，围绕**「纯离线、零无障碍、专注蓝牙音箱无损听歌 + 手机喇叭刷视频」**做了大幅重构与功能取舍：
 
-- 主畫面「每個 App 分開調音量」：每個 App 一條拉桿＋靜音鈕，正在出聲的 App 排最前面；100% ＝不動它。跟分流各自獨立，不開分流也能用。
-  Main screen → "Volume for each app": a slider and a mute button per app; apps playing right now come first; 100% = left alone.
-  Independent of the split: works with or without it.
-- 原理：小程式（`AppRoute mixer`）以 shell 身分對那個 App 的每個播放器呼叫系統的 `PlayerProxy.setVolume`（需要 `MODIFY_AUDIO_ROUTING`，shell 有）；
-  App 自己也可能改音量，所以每 5 秒重設一次。設定全回 100% 時，它先把音量還原再結束。
-  How: a helper (`AppRoute mixer`) running as the shell user calls the system `PlayerProxy.setVolume` on each player of that app
-  (needs `MODIFY_AUDIO_ROUTING`, which the shell user has). An app may change its own volume, so the value is re-sent every 5 s.
-  When every app is back at 100% it restores the volumes and exits.
+| 维度 | 原版 `splitaudio` | 本定制版 `xiaomi-splitaudio` |
+|---|---|---|
+| **功能定位与路由模式** | 提供**简单模式** + **自定义模式**（可为每个 App 单独指定输出到手机喇叭 / 蓝牙 / 有线或 USB 耳机）+ **每应用独立混音（Mixer）** | **精简聚焦单一高频场景**：移除自定义多输出与每应用混音（删除 `AppsActivity` / `Outputs` / `Mixer`），专注「白名单蓝牙音箱放音乐 + 其余 App 走手机喇叭」 |
+| **构建形态与隐私联网** | 拆分 `fdroid` / `play` 双 flavor；`play` 版含 Pro 订阅试用框架；含每日 GitHub 检查更新、崩溃诊断与一键上报后端服务器 | 合并为**单一开源免费纯离线版**（Shizuku 优先 + 内置无线 ADB 兜底）；彻底移除 Pro 订阅、版本检测、诊断上报与全部外网请求 |
+| **蓝牙触发与停服策略** | 连接**任意蓝牙**且**音乐在播**时才挂规则，音乐停播 15 秒即撤回分流（切歌或暂离时短视频声音易跳回蓝牙） | 新增**特定蓝牙音箱白名单（MAC / 名称匹配）**（连蓝牙耳机、车载不误触发）+ **固定扬声器模式**（目标音箱连接期间持续分流）+ **断开音箱定时自动停服**（默认 2 分钟，支持 0～1440 分钟或关闭） |
+| **音质保护与通话 / VoIP** | 电话与 VoIP（微信语音/语音对讲）统一撤回分流；另含「按麦克风/语音输入不暂停音乐（`NoFocus`）」轮询续播 | 常规播放 0 拦截音乐 App（100% 原生蓝牙 A2DP）；**区分运营商电话与微信语音/视频**——电话 0.25s 撤回并暂停音乐、挂断续播，微信语音/视频期间动态锁定音乐到蓝牙并清理音箱通话通道防串音；移除 `NoFocus` 麦克风抢播轮询 |
+| **多应用同时发声机制** | 主动提示并修改系统全局 `multi_audio_focus_enabled`，配合焦点栈轮询，使无声音助手的原生 Android 也能不暂停音乐 | **移除全局焦点篡改**（启动时自动清理旧版残留并恢复 `0`），改为原生协同系统自带声音助手（如小米「音助」）与音乐 App 多播开关，不留系统设置残留 |
+| **激活门槛与权限模型** | `fdroid` 版依赖**无障碍服务（`VolKeyService`）**拦截实体音量键；`play` 版依赖 `pm grant WRITE_SECURE_SETTINGS` | **彻底移除无障碍服务与 `pm grant`**，仅需「无线调试」一次性配对，仅伴生浮条按需申请标准悬浮窗权限 |
+| **后台常驻与续航设计** | 含 `BootReceiver` 开机自启常驻监听；底层退出后需反复重新连 ADB 拉起 | **移除开机常驻**，改为控制中心磁贴 / 主界面按需启停；关闭分流时底层进入 `Object.wait()` **0% CPU 休眠待命**，日常无 Wi-Fi 10ms 秒开；重启后点开一次「无线调试」自动感知点火 |
+| **手机喇叭调音交互** | `fdroid` 版靠无障碍识别前台 App 改写实体音量键；`play` 版无音量键调喇叭能力 | 新增**按音量键自动伴生竖向悬浮滑块**（`FLAG_NOT_FOCUSABLE`，全程不暂停视频）+ **控制中心磁贴长按毛玻璃小窗** + 主界面精准拉杆 |
+| **默认音乐清单与本地化** | 默认仅 YouTube Music（含 Morphe 修改版）；界面以繁体中文与英文为主 | 默认内置国内与海外常见播放器（QQ 音乐、网易云、酷狗、酷我、汽水音乐、YouTube Music、Spotify、Apple Music 等）；完善简体中文界面与引导 |
+| **底层引擎升级维护** | 覆盖安装新版后往往需手动停止旧引擎再重新部署 | 新增 `approute.dex` / `approute.sh` SHA-256 自动指纹校验与在线安全热替换（离线时自动保留旧引擎不中断） |
 
-## 原理 / How it works
+### 如何选择原版与本定制版？
+
+- **适合选择[原版 `splitaudio`](https://github.com/monarchsofchaos004-gif/splitaudio)的场景**：
+  - 需要为每个 App 自由指定任意输出设备（例如路由到有线 / USB 耳机，或反过来只让某几个 App 走喇叭）；
+  - 需要按 App 单独调节软件音量（每应用混音）；
+  - 使用 Google Pixel、Motorola 等**没有自带“声音助手”的类原生手机**，且需要靠系统全局 `multi_audio_focus_enabled` 防止 Spotify / YouTube Music 被视频暂停。
+- **适合选择本定制版 `xiaomi-splitaudio` 的场景**：
+  - 核心需求是**连特定蓝牙音箱无损听歌、其余刷视频走手机喇叭**，不希望连蓝牙耳机或车载时误分流；
+  - 希望**免无障碍权限、100% 纯离线零后台常驻**，并通过**控制中心磁贴 + 不暂停视频的侧边伴生音量条**日常操控；
+  - 使用小米 HyperOS 或其他自带“多应用同时发声”功能的 Android 13+ 手机。
+
+---
+
+## 快速上手（以小米 HyperOS 3 为例，其他品牌通用对照）
+
+### 第一步：系统声音助手与音乐多播配置（推荐，解决视频打断音乐）
+1. **小米 / HyperOS**：打开系统 **设置 → 声音与触感 → 音助**，开启 **「多应用媒体音调节」** 与 **「允许多个应用同时发声」**（其他品牌请开启系统自带的声音助手 / 多应用发声选项）。
+2. 在常用音乐 App 内开启允许同时播放（例如 **QQ 音乐 → 设置 → 允许与其他应用同时播放**）。
+3. 建议在系统蓝牙设置中关闭目标音箱的 **「通话音频」**，进一步杜绝电话/微信语音串音。
+
+### 第二步：一次性权限配置（免 Root，二选一）
+- **方式 A（Shizuku）**：启动 [Shizuku](https://shizuku.rikka.app/) 后打开本应用，点击 **「授权 Shizuku」** 即可。
+- **方式 B（内置无线 ADB，无需安装 Shizuku，推荐）**：
+  1. 在开发者选项中**开启「无线调试」**；建议顺手进入 **开发者选项 → 快捷设置开发者图块**，把 **「无线调试」** 添加到控制中心；
+  2. 打开应用按四步引导完成一次性配对与首次连接激活，提示底层就绪后即可直接关闭「无线调试」隐藏通知；
+  3. 只要手机不重启，后续日常开关分流与调音量均无需再开无线调试与 Wi-Fi；手机重启后，下拉控制中心点开一次「无线调试」即可自动激活，激活后关回即可。
+
+### 第三步：配置白名单、伴生音量条与控制中心磁贴
+1. 在主界面 **「选择音乐 App」** 中勾选保留在蓝牙音箱播放的音乐软件；
+2. 在 **「指定蓝牙音箱」** 中勾选你的蓝牙音箱（避免连接蓝牙耳机时误分流）；
+3. 点击 **「音量键伴生浮条」** 授一次系统标准悬浮窗权限，可选择 **右侧并排（默认）/ 左侧边缘 / 关闭** 并预览效果（非小米机型如与系统音量条重叠，可改选左侧边缘或关闭）——之后分流刷视频时，按实体音量键即可在侧边顺手拖动调节手机喇叭音量，全程不暂停视频；
+4. 点击 **「添加到控制中心快捷开关」**（Android 13+），将 **「音频分流」** 磁贴放到下拉控制中心（**短按**开关分流，**长按**弹出小窗及进入更多设置）；
+5. 建议将本应用省电策略设为 **「无限制」**（关闭磁贴时前台服务会自动退出，不占后台电量）。
+
+---
+
+## 工作原理
+
+```text
+xiaomi-splitaudio App
+  ├── 首次点火（每次重启仅需 1 次）：Shizuku / 内置无线 ADB (shell 用户)
+  │     └── 部署并启动 /data/local/tmp/approute.sh -> app_process AppRoute (route/AppRoute.java)
+  │           ├── 常规分流：注册系统 AudioPolicy（仅将非音乐 App 路由到手机内置扬声器，音乐走原生蓝牙 A2DP）
+  │           ├── 微信语音/视频：动态附加音乐 App 蓝牙锁定规则 + 清理白名单音箱通话通道
+  │           ├── 运营商通话：0.25s 撤回分流并暂停音乐，挂断自动续播
+  │           └── 关闭分流：撤回规则并进入 Object.wait() 0% CPU 休眠待命
+  ├── 伴生音量浮条（仅分流生效时挂载）：MonitorService -> SpeakerOverlayController
+  │     └── 监听媒体音量变化 -> 弹出无焦点澎湃风格竖向手机音量条（不暂停视频，2.6s 自动隐藏）
+  └── 日常控制（0 Wi-Fi / 0 ADB）：本机回环 TCP 127.0.0.1:47821
+        ├── 双重鉴权：32 位随机 Token（SecureRandom）+ /proc/net/tcp* Peer UID 校验
+        └── 指令集：state / ver / pause / resume / shutdown / setbt / setidle / vol get / vol set
 ```
- SplitAudio app ──Shizuku or built-in ADB (shell user)──► /data/local/tmp/approute.sh start
-                                               │
-                                               ▼
-                         app_process AppRoute (route/AppRoute.java)
-                         registers a system AudioPolicy:
-                           RENDER mix, rule = RULE_MATCH_UID(<every app except the music apps>)
-                           device = built-in speaker
-                         control port 127.0.0.1:47821 (state / volume keys; every connection needs the app's token and the right uid)
+
+- Android `shell` 用户（UID 2000）拥有 `MODIFY_AUDIO_ROUTING` 权限，因此可注册系统级 `AudioPolicy`（每条 mix 最多 20 个 UID，自动分片支持最多 50 条 mix / 1000 个应用）。
+- 底层通过 `IAudioService.getDeviceVolume / setDeviceVolume` 直接读写手机内置扬声器（`TYPE_BUILTIN_SPEAKER`）的独立媒体音量，因此调节手机喇叭音量与蓝牙音箱音量互不干扰。
+- **故障安全**：路由进程一旦停止或被杀，系统自动回收其 `AudioPolicy`，所有声音立即恢复正常蓝牙输出，绝不会导致手机静音。
+
+---
+
+## 从源码构建
+
+### 环境要求
+- **JDK 17**
+- **Android SDK**：`platforms;android-36`、`build-tools`（建议 `36.0.0` 或 `37.0.0`）
+- **Gradle 8.9**（仓库自带 `gradlew` / `gradlew.bat`）
+
+### 编译步骤
+
+> 每次修改 `route/AppRoute.java` 后，必须先重新编译生成 `app/src/main/assets/approute.dex`，再打包 APK。
+
+**Windows（PowerShell）：**
+```powershell
+powershell -ExecutionPolicy Bypass -File route/build_dex.ps1
+.\gradlew.bat testDebugUnitTest assembleDebug
 ```
-- shell 身分有 `MODIFY_AUDIO_ROUTING`，所以能註冊系統層的路由規則；有些廠牌 ROM 不理 App 自己指定的輸出裝置，但系統規則有效。
-  The shell user holds `MODIFY_AUDIO_ROUTING`, so it can register a system-level routing policy. Some OEM ROMs ignore an
-  app's own `setPreferredDevice()`, but a system policy is honoured.
-- 系統底層每條規則最多只收 **20 個 uid**（多的會被靜默丟掉），所以每 20 個 App 一條規則、最多 50 條（1000 個 App）。
-  Native AudioPolicy keeps at most **20 criteria per mix** (extras are silently dropped), so apps are split into
-  mixes of 20, up to 50 mixes (1000 apps).
-- App 本身只負責：偵測「藍牙＋音樂在播」→ 經 Shizuku（或 Play 版的內建 ADB）把小程式放進 `/data/local/tmp` 並啟動（內容沒變就略過部署，靠 `approute.ver` 的指紋）；小程式用 `setsid` 脫離，App 被系統殺掉也照跑。
-  The app only detects "Bluetooth + music playing", deploys the helper via Shizuku (or the Play build's built-in ADB; skipped when nothing
-  changed, by a fingerprint in `approute.ver`) and starts it; the helper is detached with `setsid`, so it keeps running even if the app is
-  killed. It exits by itself after Bluetooth is gone for 2 min or the music app has been silent for 10 min.
-- **指令口**：App 和小程式用本機 TCP（只綁 `127.0.0.1:47821`，網路上連不到）溝通。任何有 `INTERNET` 權限的 App 都連得上本機埠，所以每個連線要過兩關：
-  ① 第一行必須是 `auth <token>`——token 是 App 自己產生的 32 字元隨機碼（`SecureRandom`），只存在 App 的私有儲存空間，啟動指令經環境變數 `SPLITAUDIO_TOKEN` 交給小程式，
-  小程式另存一份 `/data/local/tmp/approute.token`（權限 0600、shell 擁有，其他 App 讀不到）給除錯用；② 小程式查 `/proc/net/tcp`／`tcp6`，確認對方連線的 uid
-  是啟動它的那個 App（啟動指令帶 `SPLITAUDIO_UID`）、shell 或 root。兩關任一不過就回 `denied` 並斷線，其他 App 連得進埠也問不到任何東西。
-  因此**兩個版本都需要 `INTERNET` 權限**，但只用在這支手機自己身上，沒有任何資料離開手機。除錯：`sh /data/local/tmp/approute.sh ask state`。
-  **Control channel**: the app and the helper talk over local TCP, bound to `127.0.0.1:47821` only (not reachable from the network). Any app with the `INTERNET`
-  permission can connect to a loopback port, so every connection has to pass two checks: (1) its first line must be `auth <token>` — the token is 32 random characters
-  (`SecureRandom`) the app makes itself and keeps in its private storage; the start command hands it to the helper in the environment (`SPLITAUDIO_TOKEN`), and the helper
-  also keeps a copy in `/data/local/tmp/approute.token` (mode 0600, owned by the shell user, so no app can read it) for debugging; (2) the helper looks the connection up in
-  `/proc/net/tcp` / `tcp6` and checks that its owner uid is the app that started it (its start command carries `SPLITAUDIO_UID`), the shell user or root.
-  A connection that fails either check gets `denied` and is closed, so another app can reach the port but gets nothing out of it. That is why **both builds need
-  the `INTERNET` permission** — used on this phone only (plus, fdroid build, the optional once-a-day new-version query to GitHub); no data leaves the phone. Debugging: `sh /data/local/tmp/approute.sh ask state`.
 
-## 安裝 / Install
-> 從 0.2.1 起改用正式金鑰簽名；裝過更早測試版的要先解除安裝再裝。
-> Since 0.2.1 the APK is signed with a release key; if you installed an earlier test build, uninstall it first.
-
-**fdroid 版（F-Droid／GitHub Releases）/ fdroid build**
-1. 安裝並啟動 [Shizuku](https://shizuku.rikka.app/)（無線偵錯啟動即可）。Install and start Shizuku.
-2. 從 [Releases](../../releases) 下載 APK 安裝。Install the APK from Releases.
-3. 打開 SplitAudio：按「① Shizuku 授權」；想用音量鍵功能再按「② 開啟無障礙」。
-   Open SplitAudio → "① Shizuku 授權" (grant Shizuku); optionally "② 開啟無障礙" (accessibility, for volume keys).
-
-**play 版 / play build**（不用 Shizuku / no Shizuku needed）
-1. 打開 SplitAudio，照「一次性設定」四步：開發者選項 → 無線偵錯（要連 WiFi）→ 配對（通知列直接輸入 6 位數配對碼）→ 連線。
-   Open SplitAudio and follow the four "One-time setup" steps: Developer options → Wireless debugging (on Wi-Fi) → pair (type the 6-digit code in the notification) → connect.
-2. 之後重開機只要連上 WiFi 就會自己接回，不用再配對。（手機上有 Shizuku 並授權的話，就直接用 Shizuku，這幾步可以略過。）
-   After a reboot it reconnects by itself whenever you are on Wi-Fi; no pairing again. (If Shizuku is running and granted, it is used and the steps can be skipped.)
-
-**兩個版本都要 / both builds**
-1. 小米／HyperOS：自啟動打開、省電策略設「無限制」，不然常駐監看會被清掉。
-   Xiaomi / HyperOS: enable Autostart and set battery saver to "No restrictions", otherwise the monitor gets killed.
-2. 連藍牙、播 YouTube Music → 通知欄出現「SplitAudio：分流中」。用別的音樂 App？到「選音樂 App」勾選。
-   Connect Bluetooth, play YouTube Music → the notification shows "SplitAudio：分流中" (routing on). Another music app? Tick it under "Choose music apps".
-
-介面有英文與繁體中文；其他語言歡迎到 [Weblate](https://hosted.weblate.org/engage/splitaudio/) 線上翻譯。UI in English and Traditional Chinese; other languages welcome on [Weblate](https://hosted.weblate.org/engage/splitaudio/).
-
-## 疑難排解 / Troubleshooting
-- **音量鍵沒反應，主畫面「音量鍵」那列變回橘色的「建議開」（未開）**：到系統「設定 → 無障礙」把 SplitAudio 重新打開。HyperOS 在 App 被強制停止（例如被清理記憶體的功能）後，會把它的無障礙服務關掉，要自己再開一次。
-  **The volume keys do nothing and the "Volume keys" row on the main screen is orange again ("recommended" / 未開)**: open the system Accessibility settings and switch SplitAudio on again.
-  HyperOS turns an app's accessibility service off after the app has been force-stopped (for example by a memory cleaner), so it has to be switched on again by hand.
-
-## 回報與新版提示 / Reporting and update hint
-主畫面只有一張「回報與意見」卡，按一下就送到、不用任何帳號：「能用！」直接把你這台的診斷文字（機型、系統、版本、模式、音訊裝置種類、最近幾行紀錄；App 當掉過就連同它自己的程式堆疊——裡面沒有帳號、聯絡人、藍牙名稱）送到專案自己的回報接口（程式公開在 [`server/`](server/)），「回報問題」可以先多寫一句發生什麼事；送不出去會改開已填好的 GitHub 表單，想追蹤進度也可以直接選「用 GitHub 表單」，或按「複製診斷文字」貼給我們。第一次分流順利跑約 10 分鐘，這張卡會升到主畫面頂端問一次「能用嗎」，回答後回到底下；換了版本或過 30 天會再問一次，按鈕本身一直都在，之後又不能用也隨時能再回報；分流失敗或上次 App 當掉時會提示一鍵附診斷回報。
-**新版提示**：開 App 時每天最多查一次 GitHub 發布頁，有新版就在主畫面頂端顯示卡片（「看更新內容」開發布頁；卡片會提示到你更新為止，不會漏掉修正）；**fdroid／GitHub 版只提示、不會自己下載或安裝**；從 F-Droid 客戶端安裝的不查（由 F-Droid 更新）；Play 版沒有這功能（由 Play 更新）。回報卡片會自己收起（回報後、分流又正常了、或到期），不用你管；一鍵就把修你機型需要的資訊送到，你的機型也會列進相容清單、掛你的名字。
-There is a single "Help and feedback" card on the main screen, and one tap sends the report with no account needed: "It works!" sends this phone's diagnostics (phone, ROM, version, mode, audio device types, the last few log lines, when the split was last active and, after a crash, the app's own stack trace; since 0.5.7 the one-tap report also carries a short audio-focus snapshot from the router (which apps hold the audio or are playing, the multi-audio-focus setting and the router's last log lines), so a "something pauses my music" report can be fixed without a round of questions; no accounts, contacts or Bluetooth names) to the project's own report endpoint (its code is public in [`server/`](server/)), and "Report a problem" lets you add a line about what happened first. If sending fails the pre-filled GitHub form opens instead; to follow up you can also pick "Use the GitHub form" directly, or tap "Copy diagnostics" and paste it to us. After the first clean 10 minutes of splitting the card moves to the top once to ask whether it works and returns to the bottom once you answer; it asks again after an update or after 30 days, the buttons are always there, and a phone that stops working later can always be reported again. When routing fails or the app crashed last time it offers a one-tap report with diagnostics.
-**New-version hint**: when you open the app it looks at the GitHub releases at most once a day and shows a card on top if there is a newer version ("What's new" opens the release page; the card stays until you are on the latest version, so you never miss a fix). **The fdroid / GitHub build only tells you; it never downloads or installs anything by itself.** It is skipped when the app was installed by an F-Droid client (F-Droid updates it), and the Play build does not have it (Google Play updates the app). The report cards take care of themselves: they go away once you report, once the split is working again, or when they expire, so there is nothing to tidy up, and a single tap sends what is needed to get your phone fixed and listed in COMPATIBILITY.md with you credited.
-
-## 自己編譯 / Build
-JDK 17、Android SDK（`platforms;android-36`、任一版 `build-tools`，例如 `36.0.0`）、Gradle 8.9。JDK 17, Android SDK (`platforms;android-36` and any `build-tools`, e.g. `36.0.0`), Gradle 8.9:
+**Linux / macOS：**
+```bash
+sh route/build_dex.sh
+./gradlew testDebugUnitTest assembleDebug
 ```
-sh route/build_dex.sh                                   # always first: route/AppRoute.java -> app/src/main/assets/approute.dex
-gradle assembleFdroidDebug                              # fdroid build, debug APK
-gradle assemblePlayDebug                                # play build, debug APK
-gradle testFdroidDebugUnitTest testPlayDebugUnitTest   # JVM unit tests of both builds
-gradle assembleFdroidRelease                            # fdroid build, release APK (unsigned unless you set up signing)
-gradle bundlePlayRelease                                # play build, Android App Bundle
+
+**构建未签名 Release APK：**
+```bash
+./gradlew assembleRelease
 ```
-單元測試也會編進並測試 `route/AppRoute.java`：純函式（音量格數、指令口的 token／uid 規則、`/proc/net/tcp` 解析、檔案讀取），以及在真的本機連線上跑一遍指令口。The unit tests also compile `route/AppRoute.java` and test its pure functions (volume steps, the control port's token / uid rules, the `/proc/net/tcp` parser, file readers) and the control port itself on real loopback sockets.
-play 版的內建 ADB 函式庫（libadb-android）從 JitPack 下載，只有 play 版會用到。The play build's built-in ADB library (libadb-android) comes from JitPack and only the play build uses it.
-GitHub Actions 每次 push 都會從原始碼編出 APK（含路由小程式）。CI builds the APKs (including the helper dex) from source on every push.
 
-## 隱私 / Privacy
-不收集任何資料，沒有任何資料自己離開手機。對外連線只有兩種：①fdroid／GitHub 版開 App 時每天最多一次向 GitHub 查有沒有新版，只帶 User-Agent（從 F-Droid 客戶端安裝的不查；Play 版沒有）；②**你按下**「能用！」「回報問題」或當機卡的回報鈕時，才把「複製診斷文字」那份內容（沒有帳號、聯絡人、藍牙名稱，也沒有任何裝置識別碼）送到專案的回報接口（接口程式公開在 [`server/`](server/)，只存一個加鹽雜湊當限流用、不存 IP），送之前每天最多一次向 GitHub 讀一個小檔確認接口網址。兩個版本都有 `INTERNET` 權限，除了上面那個查新版，只用在這支手機自己身上：App 和小程式之間的本機（`127.0.0.1`）指令口（要帶 App 自己的隨機 token、而且對方 uid 要是本 App，其他 App 連不進），
-以及 play 版連這支手機自己的 adbd（內建 ADB）。無障礙服務（fdroid 版）只攔音量鍵、只讀前景 App 的套件名稱，不讀畫面文字。
-Nothing is collected and no data leaves the phone on its own. There are only two outgoing connections: (1) the fdroid / GitHub build asks GitHub at most once a day, when you open the app, whether a newer version exists, sending only a User-Agent (skipped when the app was installed by an F-Droid client; the Play build has none); (2) **when you tap** "It works!", "Report a problem" or the crash card's report button, the "Copy diagnostics" text (no accounts, contacts, Bluetooth names or device identifiers) is sent to the project's report endpoint (its code is public in [`server/`](server/); it keeps only a salted hash for rate limiting, never the address), after reading a small file from GitHub at most once a day to confirm the endpoint's address. Both builds have the `INTERNET` permission, but apart from that query it is only used on this phone itself: the local (`127.0.0.1`) control port
-between the app and its helper (every connection needs the app's own random token and must come from the app's uid, so other apps cannot use it), and, in the play build,
-the connection to this phone's own adbd (built-in ADB). The accessibility service (fdroid build) only filters volume keys and reads the foreground package name;
-it does not read screen text. See [SECURITY.md](SECURITY.md).
+---
 
-## 幫忙翻譯 / Help translate
+## 隐私与安全
 
-[![Translation status](https://hosted.weblate.org/widget/splitaudio/app/svg-badge.svg)](https://hosted.weblate.org/engage/splitaudio/)
+- **零数据收集、零外网请求**：应用不连接任何远程服务器，不包含统计、广告、热更新或上报模块。
+- `INTERNET` 权限**仅用于本机通信**：连接 `127.0.0.1:47821` 底层控制口（随机 Token + `/proc/net/tcp*` Peer UID 双校验，其他 App 访问一律返回 `denied`）以及本机无线调试 `adbd`。
+- 详细安全模型与已知限制请参见 [SECURITY.md](SECURITY.md)。
 
-SplitAudio 目前有英文和繁體中文。想翻成你的語言？最簡單是在 [Weblate](https://hosted.weblate.org/engage/splitaudio/) 網頁上直接翻（不用 GitHub 帳號、不用改檔），大約 15～30 分鐘；想自己改檔看 [TRANSLATING.md](TRANSLATING.md)。
+---
 
-SplitAudio is available in English and Traditional Chinese. Want it in your language? The easiest way is to translate in the browser on [Weblate](https://hosted.weblate.org/engage/splitaudio/) (no GitHub account, no files to edit), about 15–30 minutes; to edit the files yourself see [TRANSLATING.md](TRANSLATING.md).
+## 致谢与开源协议
 
-## 授權 / License
-MIT
+- 本项目基于开源项目 **[monarchsofchaos004-gif/splitaudio](https://github.com/monarchsofchaos004-gif/splitaudio)** 进行二次修改，感谢原作者与所有贡献者提供的核心 `AudioPolicy` 路由思路与基础实现！
+- 使用的第三方开源组件：
+  - [Shizuku API](https://github.com/RikkaApps/Shizuku-API)（Apache-2.0）
+  - [libadb-android](https://github.com/MuntashirAkon/libadb-android)（Apache-2.0）
+  - [Conscrypt](https://github.com/google/conscrypt)（Apache-2.0）
+  - [spake2-java](https://github.com/MuntashirAkon/spake2-java)（LGPL-3.0，未修改原样引用）
+- 本项目沿用 **[MIT License](LICENSE)** 开源发布。

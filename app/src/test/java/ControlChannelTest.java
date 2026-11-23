@@ -102,7 +102,7 @@ public class ControlChannelTest {
         int port = server(myUid(), TOK);
         assertEquals("off", talk(port, "auth " + TOK, "state"));                  // no audio rule in a test
         assertEquals("legacy", talk(port, "auth " + TOK, "mode"));
-        assertEquals("pass", talk(port, "auth " + TOK, "vol up com.example.video"));
+        assertEquals("unknown", talk(port, "auth " + TOK, "ver"));
         assertEquals("err", talk(port, "auth " + TOK, "reboot"));                // unknown command
         assertEquals("err", talk(port, "auth " + TOK));                          // good token, then nothing
     }

@@ -21,7 +21,6 @@ jobs:
           distribution: temurin
           java-version: "17"
 
-      # ubuntu-latest ships an Android SDK (ANDROID_HOME); make sure the two pieces the dex build needs are there
       - name: Android SDK components
         run: |
           yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --licenses >/dev/null 2>&1 || true
@@ -34,29 +33,21 @@ jobs:
         with:
           gradle-version: "8.9"
 
-      # Two flavors from one code base: fdroid (Shizuku only, all features free) and play (built-in ADB, no Shizuku needed).
       - name: Unit tests
-        run: gradle --no-daemon --console=plain testFdroidDebugUnitTest testPlayDebugUnitTest
+        run: gradle --no-daemon --console=plain testDebugUnitTest
 
-      # CI builds the debug APKs of both flavors and an unsigned fdroid release APK. Releases only carry the release APK signed with
-      # the developer's key on the developer's own machine (the key never goes to CI), uploaded by hand.
-      - name: Build debug APKs
-        run: gradle --no-daemon --console=plain assembleFdroidDebug assemblePlayDebug
+      - name: Build debug APK
+        run: gradle --no-daemon --console=plain assembleDebug
 
       - uses: actions/upload-artifact@v4
         with:
-          name: splitaudio-fdroid-debug-apk
-          path: app/build/outputs/apk/fdroid/debug/app-fdroid-debug.apk
+          name: xiaomi-splitaudio-debug-apk
+          path: app/build/outputs/apk/debug/app-debug.apk
+
+      - name: Build release APK (unsigned)
+        run: gradle --no-daemon --console=plain assembleRelease
 
       - uses: actions/upload-artifact@v4
         with:
-          name: splitaudio-play-debug-apk
-          path: app/build/outputs/apk/play/debug/app-play-debug.apk
-
-      - name: Build fdroid release APK (unsigned; signed later on the developer's machine)
-        run: gradle --no-daemon --console=plain assembleFdroidRelease
-
-      - uses: actions/upload-artifact@v4
-        with:
-          name: splitaudio-fdroid-release-unsigned
-          path: app/build/outputs/apk/fdroid/release/app-fdroid-release-unsigned.apk
+          name: xiaomi-splitaudio-release-unsigned
+          path: app/build/outputs/apk/release/app-release-unsigned.apk

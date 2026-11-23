@@ -40,6 +40,6 @@ interface SetupSection {
     /** 畫面回到前景；狀態有變時呼叫 [refresh] */
     fun onResume(refresh: () -> Unit)
     fun onPause()
-    /** 主畫面最底下要多加的東西（例如授權頁按鈕） */
-    fun addFooter(parent: android.widget.LinearLayout)
+    /** 在高級區手動展開／收起一次性權限引導卡 */
+    fun toggleVisible() {}
 }

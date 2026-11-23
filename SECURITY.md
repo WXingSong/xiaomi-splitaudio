@@ -1,63 +1,33 @@
-# Security notes / 安全說明
+# 安全说明 / Security Notes
 
-SplitAudio is **alpha**. Please read the limits below before relying on it.
+`xiaomi-splitaudio` 基于开源项目 [monarchsofchaos004-gif/splitaudio](https://github.com/monarchsofchaos004-gif/splitaudio)（MIT License）二次定制，专为小米澎湃 OS（HyperOS 3 / Android 16）精简优化。请在使用前了解以下权限边界与安全设计。
 
-## Privileges（權限）
-- The routing helper (`route/AppRoute.java`) runs as the **shell user** (started through Shizuku, or through the Play build's
-  built-in ADB client). That is what lets it register a system audio policy (`MODIFY_AUDIO_ROUTING`).
-- The app writes `approute.dex` / `approute.sh` and a few small setting files (`approute.music`, `approute.pkgmap`, `approute.volpkg`,
-  flag files) into `/data/local/tmp` and runs the script there. Package names written to `approute.music` and
-  `approute.pkgmap` are validated first (`[A-Za-z0-9_.]` only) and the script only ever uses them as data. Anything else that
-  already has shell access could replace those files — this is the same trust level as shell/Shizuku itself, not an extra hole.
-- The accessibility service (fdroid build only) filters volume keys and reads only the **foreground package name**
-  (`rootInActiveWindow.packageName`). It is declared with `canRetrieveWindowContent` because Android requires that for
-  `rootInActiveWindow`; screen text is never read. The Play build has no accessibility service.
-- The Play build's built-in ADB client keeps its key pair in the app's private storage (no backup), pairs with this phone's own
-  Wireless debugging, and grants itself `WRITE_SECURE_SETTINGS` once (used only to switch Wireless debugging back on after a reboot).
-  Its `INTERNET` permission is used to reach this phone's own adbd and the helper's local control port (below). The fdroid build
-  declares `INTERNET` too, for that control port only. Nothing is ever sent off the phone.
+## 权限与信任边界
 
-## Local control channel（本機指令口）
-- The helper listens on **TCP 127.0.0.1:47821** only (loopback; it cannot be reached from the network). Any app that has the
-  `INTERNET` permission can connect to a loopback port, so **both builds declare `INTERNET`, and every connection has to pass two
-  checks** before a command is even read:
-  1. **Token.** The first line must be `auth <token>`. The token is 32 random hex characters (`SecureRandom`), made by the app on
-     first use and kept in its private storage (`route` preferences, no backup). The app puts it in the environment of the start
-     command (`SPLITAUDIO_TOKEN`); `approute.sh` passes it on to the helper and also writes it to `/data/local/tmp/approute.token`
-     (mode 0600, owned by the shell user, so no app can read it) for `approute.sh ask`. It is compared in constant time.
-  2. **Uid.** The helper looks the connection up by its source port in `/proc/net/tcp6` and `/proc/net/tcp` (the shell user can
-     read them, ordinary apps cannot since Android 10) and takes the uid that owns the client socket. Only the app that started the helper (its uid is handed over in
-     the environment variable `SPLITAUDIO_UID` of the start command), the shell user (2000) and root (0) are served. When the
-     helper starts it tries this lookup on a connection to itself. Where that works, a connection that cannot be found in the
-     tables is refused too (a client that hangs up right after sending would otherwise slip through); where it does not work at
-     all (e.g. a ROM that hides those files from the shell user) the token alone decides, and the helper logs that at start.
-  Anything else gets `denied` and is disconnected: another app can reach the port, but it gets nothing out of it. A helper started
-  without `SPLITAUDIO_UID` serves shell and root only; without a usable token it does not open the port at all.
-- Commands (one line after the `auth` line, at most 512 characters, parsed strictly, nothing is passed to a shell): `state` →
-  `on`/`off`; `mode` → `map`/`legacy`; `vol up|down <package>` → changes the phone speaker volume by one step (about 1/15 of the
-  music stream's range, read from the audio service), only while the rule is on and only for apps that are being routed to the
-  speaker. Anything else → `err`. Commands run one at a time; at most 8 connections are served at once and each has 1.5 s to send
-  its lines, so a silent client cannot block the others.
-- Limits you should know about: the token travels unencrypted over the loopback interface, so a program that grabs port 47821
-  *before* the helper starts would see the token the app sends. It still could not use it against the real helper (check 2 turns
-  that program away), and nothing sensitive crosses this channel (a status word, one volume step), but it could give the app wrong
-  status answers (a nuisance, not a data leak). Clearing the app's data changes the token (and reinstalling usually changes the uid
-  too); a helper that is still running then answers `denied` until it is stopped ("Stop split" works without the token) or ends by itself
-  (Bluetooth gone for 2 minutes / music silent for 10 minutes).
-- For debugging from a shell: `sh /data/local/tmp/approute.sh ask state` (reads the token from the 0600 file; the shell user is
-  allowed by check 2).
-- 中文摘要：指令口是本機 `127.0.0.1:47821` 的 TCP；每個連線第一行要帶 App 自己的隨機 token（`auth <token>`），而且小程式查
-  `/proc/net/tcp` 確認對方 uid 是本 App（或 shell／root），其他 App 連得進埠也一律 `denied`。所以兩個版本都需要 `INTERNET` 權限，
-  但沒有任何資料離開手機。
+- **Shell 路由守护进程（`route/AppRoute.java`）**：以 Android `shell` 用户（UID 2000）运行，由 Shizuku 或内置无线 ADB 客户端启动，用于获取 `MODIFY_AUDIO_ROUTING` 权限以注册系统级 `AudioPolicy` 和独立读写手机内置扬声器音量。
+- **临时文件部署（`/data/local/tmp`）**：应用仅向 `/data/local/tmp` 写入 `approute.dex`、`approute.sh`、`approute.ver`、`approute.music`、`approute.btfilter`、`approute.idle` 与 `approute.token`。包名与蓝牙配置在写入前均经过字符清洗与校验，脚本仅将其作为数据读取，不参与 shell 命令拼接；所有文件的信任边界与设备本身的 `shell` / Shizuku 权限一致。
+- **零无障碍权限与最小化悬浮窗权限**：本定制版已完全移除 `BIND_ACCESSIBILITY_SERVICE`，不读取屏幕内容、不拦截全局按键；`SYSTEM_ALERT_WINDOW` 仅用于在分流生效且用户按下实体音量键时，在侧边伴生展示无焦点（`FLAG_NOT_FOCUSABLE`）的系统风格手机喇叭音量滑块（不暂停视频，可在主界面随时关闭）。
+- **内置无线 ADB 客户端**：密钥对仅保存在应用私有存储目录（`android:allowBackup="false"`，禁止备份）；仅配对并连接本机 `adbd`。全程不执行 `pm grant`，通过「无线调试」完成一次底层激活后立即断开 ADB 连接（日常可手动关闭无线调试；Manifest 中保留的 `WRITE_SECURE_SETTINGS` 仅用于兼容旧版已手动授权设备，本应用不再主动申请）。
+- **100% 纯离线**：`INTERNET` 权限仅用于访问本机 `127.0.0.1:47821` 控制口与本机无线调试 `adbd`，应用本身不发起任何外部网络请求。
 
-## Known limits（已知極限）
-- Native AudioPolicy keeps at most 20 uids per mix and 50 mixes per policy → at most 1000 app uids are routed; any extra
-  apps stay on Bluetooth (user-installed apps are listed first).
-- Music apps are chosen in the app (default: YouTube Music + the Morphe build) and passed to the helper as package names; apps
-  that are not installed are ignored.
-- Verified on one device (Xiaomi 15, HyperOS 3, Android 16). Other ROMs may ignore or reject the policy; if the helper
-  dies or the policy is rejected, audio simply stays on Bluetooth.
-- Apps installed **after** routing started are not included until the next start (music stop → start again).
+## 本机控制口（`127.0.0.1:47821`）
 
-## Reporting
-Please open a GitHub issue. The only listener is bound to 127.0.0.1 (nothing is reachable from the network), so there is no private disclosure channel.
+底层守护进程仅绑定回环地址 `127.0.0.1:47821`（局域网与外网不可达）。任何拥有 `INTERNET` 权限的本机应用都可以尝试连接回环端口，因此每个连接必须同时通过**两道校验**后才会处理指令：
+
+1. **随机 Token 校验**：连接首行必须为 `auth <token>`。Token 为应用首次运行时通过 `SecureRandom` 生成的 32 位十六进制随机串，存放在应用私有存储（不备份），启动时经环境变量 `SPLITAUDIO_TOKEN` 传给守护进程，并由 `approute.sh` 写入 `/data/local/tmp/approute.token`（权限 `0600`、属主 `shell`，普通应用不可读），采用常量时间比对（`MessageDigest.isEqual`）。
+2. **对端 UID 校验**：守护进程读取 `/proc/net/tcp6` 与 `/proc/net/tcp` 查找客户端源端口归属 UID，仅放行启动它的本应用 UID（`SPLITAUDIO_UID`）、`shell`（2000）与 `root`（0）。启动时会自检 `/proc/net/tcp*` 可读性；验证失败或来源不明一律回复 `denied` 并关闭连接。
+
+- **受控指令集**（单行严格解析，上限 4096 字节，不调用 shell，串行执行，最大并发 8 连接、单连接超时 1.5 秒）：
+  - `state` → 返回 `on` / `off` / `paused`
+  - `ver` → 返回运行中引擎的 SHA-256 指纹（用于覆盖安装后自动热升级校验）
+  - `pause` / `resume` / `shutdown` → 进入 0 CPU 休眠待命 / 唤醒 / 退出进程
+  - `setbt <base64|->` / `setidle <0..1440>` → 热同步蓝牙音箱白名单与断开自动停服分钟数
+  - `vol get` / `vol set <0..100>` → 读写手机内置扬声器独立媒体音量
+  - 其他任意输入均返回 `err`。
+- **已知理论边界**：回环接口上的控制指令为明文传输；若恶意进程在守护进程启动前抢先占用 47821 端口，最多只能返回错误状态文本，无法通过 UID 校验控制真实守护进程，且通道内不涉及任何用户隐私数据。清除应用数据或卸载重装会更换 Token/UID，旧守护进程将拒绝连接，点击「彻底停止底层服务」或通过 `sh /data/local/tmp/approute.sh stop` 即可清理。
+
+## 已知限制
+
+- Android 原生 `AudioPolicy` 限制每条 mix 最多 20 个 UID、单个策略最多 50 条 mix（合计最多路由 1000 个应用 UID），超出部分自动保持在蓝牙输出（用户安装应用优先排列）。
+- 分流启动后新安装的应用需在下次重新启用路由规则时生效。
+- 实机已验证于 Xiaomi 14 Ultra（HyperOS 3 / Android 16）；不同厂商 ROM 对系统 `AudioPolicy` 的兼容存在差异，若策略被系统拒绝或守护进程退出，音频会自动回落到系统默认蓝牙输出，不会造成无声。

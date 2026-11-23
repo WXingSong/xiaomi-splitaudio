@@ -6,12 +6,16 @@ import java.io.File
 
 /** 簡單模式的音樂 App 清單：預設、套件名驗證、approute.music 的檔案文字、勾選規則（至少留一個）、跟 approute.sh 內建預設一致。 */
 class MusicTest {
-    @Test fun defaults_areYtMusicFirstThenCommonPlayers() {
-        assertEquals(listOf("com.google.android.apps.youtube.music", "app.morphe.android.apps.youtube.music"), Music.DEFAULT.toList().take(2))
-        assertTrue(Music.DEFAULT.containsAll(listOf("com.spotify.music", "com.apple.android.music", "deezer.android.app", "com.aspiro.tidal",
-            "com.amazon.mp3", "com.soundcloud.android", "com.pandora.android", "com.maxmpz.audioplayer")))
-        assertEquals(10, Music.DEFAULT.size)
-        assertEquals(Music.DEFAULT, Music.valid(Music.DEFAULT))   // every default passes the package-name check
+    @Test fun defaults_includeQqMusicAndCommonPlayers() {
+        assertEquals("com.tencent.qqmusic", Music.DEFAULT.first())
+        assertTrue(Music.DEFAULT.containsAll(listOf(
+            "com.tencent.qqmusic", "com.netease.cloudmusic", "com.kugou.android", "cn.kuwo.player", "com.luna.music",
+            "com.google.android.apps.youtube.music", "app.morphe.android.apps.youtube.music",
+            "com.spotify.music", "com.apple.android.music", "deezer.android.app", "com.aspiro.tidal",
+            "com.amazon.mp3", "com.soundcloud.android", "com.pandora.android", "com.maxmpz.audioplayer"
+        )))
+        assertEquals(15, Music.DEFAULT.size)
+        assertEquals(Music.DEFAULT, Music.valid(Music.DEFAULT))
     }
 
     @Test fun effective_nothingSavedOrNothingValid_isTheDefault() {
@@ -60,8 +64,8 @@ class MusicTest {
         assertTrue(sh.contains("SPLITAUDIO_TOKEN"))
         assertTrue(sh.contains("approute.token"))
         assertTrue("the token file must be private to the shell user", sh.contains("umask 077") && sh.contains("chmod 600 \$D/approute.token"))
-        assertEquals("settoken runs right before each router launch (start and startmap), after the already-running check",
-            2, Regex("(?m)^    settoken\\n    CLASSPATH=").findAll(sh).count())
+        assertEquals("settoken runs right before router launch (start), after the already-running check",
+            1, Regex("(?m)^    settoken\\n    CLASSPATH=").findAll(sh).count())
         assertTrue(sh.contains("ask) shift;"))
     }
 }

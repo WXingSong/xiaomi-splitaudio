@@ -1,45 +1,99 @@
 <?xml version="1.0" encoding="utf-8"?>
-<manifest xmlns:android="http://schemas.android.com/apk/res/android">
-    <!-- Shared by both flavors. Flavor-specific parts: src/fdroid (VolKeyService; MonitorService with the specialUse foreground service type)
-         and src/play (MonitorService with connectedDevice; built-in ADB: pairing service, extra permissions).
-         INTERNET is declared in each flavor's own manifest: both need it for the control port 127.0.0.1:47821 of the routing helper
-         (token + uid checked, nothing leaves the phone), the play flavor also for its built-in ADB client. -->
+<manifest xmlns:android="http://schemas.android.com/apk/res/android" xmlns:tools="http://schemas.android.com/tools">
+    <!-- INTERNET 仅用于本机控制口 (127.0.0.1:47821) 与本机无线调试 adbd，不发起任何外网请求 -->
+    <uses-permission android:name="android.permission.INTERNET"/>
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE"/>
-    <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED"/>
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_CONNECTED_DEVICE"/>
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS"/>
-    <!-- The app pickers (music apps, custom mode, volume) list apps that have a launcher icon; the volume keys leave the home screen app(s) alone,
-         found with a HOME intent (package visibility, Android 11+). No QUERY_ALL_PACKAGES. -->
+    <!-- 读取已配对/已连接蓝牙音频设备名称与地址，用于指定特定蓝牙音箱触发分流 -->
+    <uses-permission android:name="android.permission.BLUETOOTH_CONNECT"/>
+    <!-- 内置无线 ADB 发现本机无线调试服务 (mDNS) -->
+    <uses-permission android:name="android.permission.ACCESS_WIFI_STATE"/>
+    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE"/>
+    <uses-permission android:name="android.permission.CHANGE_WIFI_MULTICAST_STATE"/>
+    <!-- 悬浮窗权限：仅用于在分流期间按实体音量键时伴生弹出系统风格手机喇叭音量条（不暂停视频、零无障碍） -->
+    <uses-permission android:name="android.permission.SYSTEM_ALERT_WINDOW"/>
+    <!-- 可选兼容权限：不再主动申请或要求开启「USB 调试（安全设置）」，仅兼容旧版已授权设备 -->
+    <uses-permission android:name="android.permission.WRITE_SECURE_SETTINGS" tools:ignore="ProtectedPermissions"/>
+    <!-- 防护：阻止 libadb-android 合并引入旧版存储或电话权限 -->
+    <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE" tools:node="remove"/>
+    <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" tools:node="remove"/>
+    <uses-permission android:name="android.permission.READ_PHONE_STATE" tools:node="remove"/>
+
     <queries>
         <intent>
             <action android:name="android.intent.action.MAIN"/>
             <category android:name="android.intent.category.LAUNCHER"/>
         </intent>
-        <intent>
-            <action android:name="android.intent.action.MAIN"/>
-            <category android:name="android.intent.category.HOME"/>
-        </intent>
-        <intent>
-            <action android:name="android.intent.action.TTS_SERVICE"/>
-        </intent>
     </queries>
-    <application android:name=".App" android:label="@string/app_name" android:icon="@mipmap/ic_launcher" android:roundIcon="@mipmap/ic_launcher" android:allowBackup="false" android:theme="@android:style/Theme.DeviceDefault.Light">
+
+    <application
+        android:name=".App"
+        android:label="@string/app_name"
+        android:icon="@mipmap/ic_launcher"
+        android:roundIcon="@mipmap/ic_launcher_round"
+        android:allowBackup="false"
+        android:theme="@android:style/Theme.DeviceDefault.Light">
+
         <activity android:name=".MainActivity" android:exported="true">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN"/>
                 <category android:name="android.intent.category.LAUNCHER"/>
             </intent-filter>
         </activity>
-        <activity android:name=".AppsActivity" android:exported="false" android:label="@string/apps_title"/>
         <activity android:name=".MusicActivity" android:exported="false" android:label="@string/music_title"/>
-        <activity android:name=".MixerActivity" android:exported="false" android:label="@string/mixer_title"/>
-        <!-- MonitorService: declared in src/fdroid and src/play (the foreground service type differs) -->
-        <receiver android:name=".BootReceiver" android:exported="true">
+        <activity android:name=".BtDevicesActivity" android:exported="false" android:label="@string/bt_title"/>
+
+        <!-- 下拉控制中心磁贴长按弹出的小米风格手机喇叭音量小窗 -->
+        <activity
+            android:name=".SpeakerPanelActivity"
+            android:exported="true"
+            android:excludeFromRecents="true"
+            android:taskAffinity=""
+            android:launchMode="singleInstance"
+            android:theme="@style/Theme.SplitAudio.ControlPanel"
+            android:label="@string/tile_label">
             <intent-filter>
-                <action android:name="android.intent.action.BOOT_COMPLETED"/>
-                <action android:name="android.intent.action.MY_PACKAGE_REPLACED"/>
+                <action android:name="android.service.quicksettings.action.QS_TILE_PREFERENCES"/>
+                <category android:name="android.intent.category.DEFAULT"/>
             </intent-filter>
-        </receiver>
-        <!-- Shizuku backend: both flavors (the play flavor uses Shizuku when it is granted, otherwise its built-in ADB) -->
-        <provider android:name="rikka.shizuku.ShizukuProvider" android:authorities="${applicationId}.shizuku" android:multiprocess="false" android:enabled="true" android:exported="true" android:permission="android.permission.INTERACT_ACROSS_USERS_FULL"/>
+        </activity>
+
+        <!-- 按需启动的音频分流监控服务（由下拉快捷磁贴或主界面手动启停，不默认开机常驻） -->
+        <service
+            android:name=".MonitorService"
+            android:exported="false"
+            android:foregroundServiceType="connectedDevice"/>
+
+        <!-- 下拉控制中心快捷开关磁贴 -->
+        <service
+            android:name=".SplitTileService"
+            android:exported="true"
+            android:icon="@drawable/ic_stat_route"
+            android:label="@string/tile_label"
+            android:permission="android.permission.BIND_QUICK_SETTINGS_TILE">
+            <intent-filter>
+                <action android:name="android.service.quicksettings.action.QS_TILE"/>
+            </intent-filter>
+            <meta-data
+                android:name="android.service.quicksettings.TOGGLEABLE_TILE"
+                android:value="true"/>
+        </service>
+
+        <!-- 内置无线 ADB 一次性配对服务与广播接收器 -->
+        <service
+            android:name=".adb.PairService"
+            android:exported="false"
+            android:foregroundServiceType="connectedDevice"/>
+        <receiver android:name=".adb.PairReceiver" android:exported="false"/>
+
+        <!-- Shizuku 后端支持 -->
+        <provider
+            android:name="rikka.shizuku.ShizukuProvider"
+            android:authorities="${applicationId}.shizuku"
+            android:multiprocess="false"
+            android:enabled="true"
+            android:exported="true"
+            android:permission="android.permission.INTERACT_ACROSS_USERS_FULL"/>
     </application>
 </manifest>

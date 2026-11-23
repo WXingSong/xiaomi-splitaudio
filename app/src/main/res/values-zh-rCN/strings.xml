@@ -1,0 +1,162 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">SplitAudio 音频分流</string>
+
+    <!-- 一次性权限引导（Shizuku 优先 / 内置无线 ADB 兜底） -->
+    <string name="sec_setup">一次性权限设置</string>
+    <string name="setup_done_title">权限设置完成 ✓</string>
+    <string name="setup_done_d">已完成配对。日常可关闭「无线调试」，重启后在控制中心点开一次「无线调试」即可自动激活。</string>
+    <string name="setup_redo">展开查看设置步骤</string>
+    <string name="shz_hint">检测到 Shizuku 正在运行。可直接授权使用 Shizuku，跳过下方无线调试步骤。</string>
+    <string name="btn_grant_shizuku">授权 Shizuku</string>
+    <string name="chip_done">已完成 ✓</string>
+    <string name="chip_todo">待完成</string>
+    <string name="chip_next">下一步</string>
+    <string name="step1_title">开发者选项</string>
+    <string name="step1_d">设置 → 我的设备 → 全部参数与信息 → 连续点击「OS 版本」多次开启开发者选项，再返回此处。</string>
+    <string name="btn_open_about">打开「关于手机」</string>
+    <string name="btn_open_dev">打开开发者选项</string>
+    <string name="step2_title">无线调试</string>
+    <string name="step2_d">连接 Wi-Fi，在开发者选项中打开「无线调试」。建议在「快捷设置开发者图块」中把「无线调试」放到控制中心方便重启后一键点开。</string>
+    <string name="btn_open_wd">打开无线调试</string>
+    <string name="need_wifi">当前未连接 Wi-Fi（无线调试需先连接 WLAN）。</string>
+    <string name="step3_title">配对本机</string>
+    <string name="step3_d">点击「开始配对」，在无线调试页点「使用配对码配对设备」，不切走弹窗，直接下拉通知栏点「输入配对码」填 6 位码（小米如未显示输入框，可用小窗/分屏在下方输入，或临时将系统通知样式切为原生）。</string>
+    <string name="btn_pair">开始配对</string>
+    <string name="pair_code_hint">6 位配对码</string>
+    <string name="btn_pair_send">配对</string>
+    <string name="pair_wait">正在搜索配对窗口…（请点「使用配对码配对设备」）</string>
+    <string name="pair_found">已找到配对窗口，请输入 6 位配对码。</string>
+    <string name="pair_busy">正在配对…</string>
+    <string name="pair_ok">配对成功 ✓</string>
+    <string name="pair_fail">配对失败：%1$s</string>
+    <string name="pair_bad_code">配对码必须为 6 位数字。</string>
+    <string name="pair_no_dialog">请先打开「使用配对码配对设备」弹窗。</string>
+    <string name="step4_title">连接并激活</string>
+    <string name="step4_d">保持「无线调试」开启，点击下方按钮启动底层路由引擎。激活完成后即可关闭「无线调试」隐藏通知，只要手机不重启，后续日常均无需再开无线调试与 Wi-Fi。</string>
+    <string name="btn_connect">立即连接</string>
+    <string name="toast_adb_connecting">正在连接无线调试…</string>
+    <string name="toast_adb_ok">连接成功，底层引擎已待命 ✓</string>
+    <string name="toast_adb_ok_close_wd">底层引擎已激活 ✓，现在可关闭「无线调试」</string>
+    <string name="toast_adb_fail">连接失败：%1$s</string>
+    <string name="n_pair_title">SplitAudio 配对</string>
+    <string name="n_pair_wait">等待中：请在无线调试页点击「使用配对码配对设备」。</string>
+    <string name="n_pair_enter">请输入弹窗显示的 6 位配对码。</string>
+    <string name="n_pair_label">配对码</string>
+    <string name="n_pair_action">输入配对码</string>
+    <string name="n_pair_busy">正在配对…</string>
+    <string name="n_pair_ok">配对成功，正在完成连接…</string>
+    <string name="n_pair_fail">配对失败（%1$s），请重新打开配对弹窗。</string>
+    <string name="ch_pair_wait">无线调试搜索中</string>
+    <string name="ch_pair">无线调试配对输入</string>
+    <string name="s_need_pair">请先打开应用完成一次性权限设置</string>
+    <string name="s_need_wifi_init">需连一次 Wi-Fi 激活底层</string>
+    <string name="s_need_wd_init">请开一次「无线调试」激活底层</string>
+    <string name="s_no_adb">等待无线调试（重启后首次需开一次无线调试）</string>
+
+    <!-- 快捷磁贴与状态 -->
+    <string name="tile_label">音频分流</string>
+    <string name="tile_off">已关闭</string>
+    <string name="btn_add_tile">添加到控制中心快捷开关</string>
+    <string name="tile_add_ok">已添加到控制中心 ✓</string>
+    <string name="tile_add_exists">控制中心里已经有该磁贴</string>
+    <string name="tile_add_manual">请下拉控制中心点「编辑」手动添加「音频分流」</string>
+    <string name="vol_card_title">手机喇叭音量</string>
+    <string name="vol_card_hint" formatted="false">支持 0%～100% 精准拖动调节手机喇叭音量（与蓝牙音箱音量相互独立，配合小米「音助」使用更佳）。</string>
+    <string name="btn_start">开启分流</string>
+    <string name="btn_stop">停止分流</string>
+    <string name="btn_stop_short">停止</string>
+    <string name="live_on">分流中</string>
+    <string name="live_wait_bt">等待目标蓝牙音箱</string>
+    <string name="live_need_wifi">需连一次 Wi-Fi 激活底层</string>
+    <string name="live_need_wd">需开一次无线调试激活底层</string>
+    <string name="live_bt_other">非目标蓝牙（未分流）</string>
+    <string name="live_stopped">已关闭</string>
+    <string name="st_bt_all">目标音箱：未指定（匹配所有蓝牙设备）</string>
+    <string name="st_bt_selected">目标音箱：%1$s</string>
+    <string name="st_last">上次操作：%1$s</string>
+    <string name="st_conn">后端：%1$s</string>
+    <string name="st_engine">底层引擎：%1$s</string>
+    <string name="eng_on">运行中（分流规则已生效）</string>
+    <string name="eng_wait">运行中（等待目标音箱或电话中）</string>
+    <string name="eng_standby">休眠待命中（0 CPU，断 Wi-Fi 也可秒开）</string>
+    <string name="eng_stopped">未启动（首次开启需在 Wi-Fi 下激活一次）</string>
+    <string name="v_connected">已连接 ✓</string>
+    <string name="v_disconnected">未连接</string>
+    <string name="v_none">未配置</string>
+    <string name="v_granted">已授予 ✓</string>
+    <string name="v_not_granted">未授予</string>
+    <string name="s_split">分流中</string>
+    <string name="s_starting">启动中…</string>
+    <string name="s_connecting_adb">正在激活底层服务…</string>
+    <string name="s_wait_target">等待目标音箱</string>
+    <string name="s_bt_other">非目标蓝牙（未分流）</string>
+    <string name="s_router_wait">待命中（等待目标音箱）</string>
+    <string name="s_result">启动结果：%1$s</string>
+    <string name="ch_route">分流状态</string>
+    <string name="notif_title">SplitAudio：%1$s</string>
+
+    <!-- 高级与维护（默认折叠） -->
+    <string name="adv_title_collapsed">高级与维护 ▾</string>
+    <string name="adv_title_expanded">高级与维护 ▴</string>
+    <string name="btn_toggle_setup">展开 / 收起权限引导</string>
+    <string name="btn_stop_all">彻底停止底层服务（释放休眠进程）</string>
+    <string name="toast_stopped_all">已彻底停止底层服务，下次开启需重新激活</string>
+
+    <!-- 分流配置 -->
+    <string name="sec_custom">分流配置</string>
+    <string name="btn_music">选择音乐 App（已选 %1$d）</string>
+    <string name="music_title">音乐 App</string>
+    <string name="music_hint">勾选留在蓝牙音箱播放的音乐 App（如 QQ 音乐），其余 App 媒体声音走手机喇叭。至少保留一个。</string>
+    <string name="music_last">至少需要保留一个音乐 App。</string>
+    <string name="apps_search">搜索应用</string>
+
+    <!-- 特定蓝牙音箱白名单 -->
+    <string name="btn_bt_all">指定蓝牙音箱（未限，匹配全部蓝牙）</string>
+    <string name="btn_bt_count">指定蓝牙音箱（已选 %1$d 台）</string>
+    <string name="bt_title">指定蓝牙音箱</string>
+    <string name="bt_hint">勾选需要触发分流的特定蓝牙音箱。勾选后，连接蓝牙耳机等其他设备时不会分流；建议在系统蓝牙中关闭该音箱的「通话音频」以防电话/微信视频串音。</string>
+    <string name="bt_perm_hint">需要「附近设备」权限才能读取已配对蓝牙音箱的名称和 MAC 地址。</string>
+    <string name="bt_perm_btn">授予附近设备权限</string>
+    <string name="bt_search">搜索蓝牙设备名称或 MAC</string>
+    <string name="bt_empty">未发现已连接或已配对的蓝牙设备，请先在系统蓝牙中配对你的音箱。</string>
+    <string name="bt_tag_connected">已连接</string>
+    <string name="bt_tag_paired">已配对</string>
+    <string name="bt_tag_saved">已保存</string>
+
+    <!-- 断开目标音箱自动停服配置 -->
+    <string name="btn_autostop_min">断开音箱自动停服：%1$d 分钟</string>
+    <string name="btn_autostop_off">断开音箱自动停服：已关闭</string>
+    <string name="autostop_dialog_title">目标音箱断开多久后自动停服</string>
+    <string name="autostop_off">关闭（不自动停服，手动开关）</string>
+    <string name="autostop_min">%1$d 分钟</string>
+    <string name="autostop_custom">自定义分钟数…</string>
+    <string name="autostop_custom_hint">输入 0～1440（0 表示关闭）</string>
+    <string name="autostop_invalid">请输入 0 到 %1$d 之间的整数</string>
+
+    <!-- 音量键伴生悬浮滑块配置 -->
+    <string name="btn_overlay_right">音量键伴生浮条：右侧并排 ✓</string>
+    <string name="btn_overlay_left">音量键伴生浮条：左侧边缘 ✓</string>
+    <string name="btn_overlay_off">音量键伴生浮条：已关闭</string>
+    <string name="btn_overlay_need_perm">音量键伴生浮条：点此开启悬浮窗权限</string>
+    <string name="overlay_dialog_title">按音量键伴生手机音量条</string>
+    <string name="overlay_opt_right">右侧并排（推荐，紧邻系统音量条）</string>
+    <string name="overlay_opt_left">左侧边缘</string>
+    <string name="overlay_opt_off">关闭</string>
+    <string name="overlay_btn_preview">预览效果</string>
+    <string name="overlay_perm_title">开启悬浮窗权限</string>
+    <string name="overlay_perm_msg">分流生效期间，按实体音量键调蓝牙时，将在侧边同步浮出系统风格的「手机喇叭」拉动条，拖动调音全程不暂停视频、无需无障碍权限。</string>
+    <string name="overlay_perm_go">去开启</string>
+
+    <!-- 快捷磁贴长按小窗（小米控制中心风格） -->
+    <string name="panel_speaker_label">手机喇叭音量</string>
+    <string name="panel_muted">已静音</string>
+    <string name="panel_hint_ready">独立调节手机喇叭，不影响蓝牙音箱 · 点左侧图标静音</string>
+    <string name="panel_hint_standby">底层待命中，可先调节音量或点右上角开关开启分流</string>
+    <string name="panel_hint_inactive">打开上方分流开关激活底层后，即可独立调节手机喇叭音量</string>
+    <string name="panel_hint_need_setup">请点「更多设置」完成一次性权限配置</string>
+    <string name="panel_btn_more">更多设置</string>
+    <string name="panel_btn_done">完成</string>
+    <string name="panel_status_standby">已关闭 · 底层待命中</string>
+    <string name="panel_switch_desc">音频分流开关</string>
+</resources>

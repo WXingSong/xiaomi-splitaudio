@@ -115,6 +115,6 @@ class MusicActivity : Activity() {
 
     override fun onPause() {
         super.onPause()
-        if (changed) { changed = false; val c = applicationContext; Thread { Route.apply(c) }.start() }
+        if (changed) { changed = false; val c = applicationContext; Thread { Route.applyMusicChange(c) }.start() }
     }
 }

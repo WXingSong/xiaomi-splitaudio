@@ -10,8 +10,7 @@ class RouteTest {
 
     @Test fun cmd_putsTheAppUidAndTokenInFrontOfEveryScriptCall() {
         assertEquals("SPLITAUDIO_UID=10234 SPLITAUDIO_TOKEN=$tok sh /data/local/tmp/approute.sh start", Route.cmd(10234, tok, "start"))
-        assertEquals("SPLITAUDIO_UID=10234 SPLITAUDIO_TOKEN=$tok sh /data/local/tmp/approute.sh multifocus on", Route.cmd(10234, tok, "multifocus on"))
-        for (sub in listOf("start", "startmap", "stop", "mixer", "mixstop", "multifocus on", "multifocus off", "mickeep on", "mickeep off", "players"))
+        for (sub in listOf("start", "stop", "status", "ask state"))
             assertTrue(sub, Route.cmd(1010123, tok, sub).startsWith("SPLITAUDIO_UID=1010123 SPLITAUDIO_TOKEN=$tok sh /data/local/tmp/approute.sh $sub"))
     }
 
@@ -58,11 +57,11 @@ class RouteTest {
         assertNull(Route.answerOf(null).reply); assertNotEquals(Route.DENIED, Route.answerOf(null).error)
     }
 
-    @Test fun isAlive_onlyOnOrOff() {
-        assertTrue(Route.isAlive("on")); assertTrue(Route.isAlive("off"))
+    @Test fun isAlive_includesOnOffAndPaused() {
+        assertTrue(Route.isAlive("on")); assertTrue(Route.isAlive("off")); assertTrue(Route.isAlive("paused"))
         assertFalse(Route.isAlive(null))
-        assertFalse(Route.isAlive(Route.DENIED))   // 別的 token／uid 起的舊路由：不是我們的
-        assertFalse(Route.isAlive("err"))          // 沒有 token 協定的舊路由把 auth 那行當指令回 err：不是我們這版的
+        assertFalse(Route.isAlive(Route.DENIED))
+        assertFalse(Route.isAlive("err"))
         assertFalse(Route.isAlive("")); assertFalse(Route.isAlive("map")); assertFalse(Route.isAlive("ON"))
     }
 
@@ -104,17 +103,15 @@ class RouteTest {
         assertFalse(Route.sameVersion(null, "abc123"))
     }
 
-    @Test fun micKeepOf_readsOnOrOffFromTheLastLine() {
-        assertEquals("on", Route.micKeepOf(0, "on\n"))
-        assertEquals("off", Route.micKeepOf(0, "off\n"))
-        assertEquals("off", Route.micKeepOf(0, "some warning\noff\n"))   // 前面有雜訊也只看最後一行
-        assertEquals("on", Route.micKeepOf(0, " on \r\n"))
-        assertNull(Route.micKeepOf(-2, "no_backend"))                     // 後端不能用
-        assertNull(Route.micKeepOf(-1, "on"))                             // 逾時：輸出不可信
-        assertNull(Route.micKeepOf(-3, "IOException:boom"))
-        assertNull(Route.micKeepOf(0, ""))
-        assertNull(Route.micKeepOf(0, "mickeep=on"))                      // 這個只讀旗標檔，不是 approute.sh 的回答格式
-        assertNull(Route.micKeepOf(0, "ON"))
+    @Test fun needsUpgrade_detectsOutdatedAndLegacyHelpers() {
+        val v = "a".repeat(64)
+        assertFalse(Route.needsUpgrade(v, v))
+        assertFalse(Route.needsUpgrade("$v\n", v))
+        assertTrue(Route.needsUpgrade("b".repeat(64), v))
+        assertTrue(Route.needsUpgrade("err", v))        // 旧版底层不认识 ver 命令，回 err → 自动升级
+        assertTrue(Route.needsUpgrade("unknown", v))
+        assertTrue(Route.needsUpgrade("", v))
+        assertTrue(Route.needsUpgrade(null, v))
     }
 
     @Test fun hasPid_scriptOutput() {
@@ -127,12 +124,15 @@ class RouteTest {
 
     @Test fun sha256_knownVector() = assertEquals("ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad", Route.sha256("abc".toByteArray()))
 
-    @Test fun diagLines_shortNonBlankAndBounded() {
-        assertEquals(listOf("(no answer)"), Route.diagLines("\n  \n"))
-        val out = Route.diagLines("multi_audio_focus_enabled=1\n\nmickeep=on  \n" + (1..100).joinToString("\n") { "l$it" } + "\n" + "y".repeat(500))
-        assertEquals("multi_audio_focus_enabled=1", out[0]); assertEquals("mickeep=on", out[1])
-        assertEquals(Report.ROUTER_LINES, out.size)
-        assertEquals(160, Route.diagLines("y".repeat(500))[0].length)
+    @Test fun parseOkInt_parsesPercentageReplies() {
+        assertEquals(0, Route.parseOkInt("ok 0"))
+        assertEquals(46, Route.parseOkInt("ok 46"))
+        assertEquals(100, Route.parseOkInt("ok 100"))
+        assertEquals(100, Route.parseOkInt("ok 120"))
+        assertNull(Route.parseOkInt("pass"))
+        assertNull(Route.parseOkInt("err"))
+        assertNull(Route.parseOkInt("ok abc"))
+        assertNull(Route.parseOkInt(null))
     }
 
     @Test fun verifyOk_everyFileMustMatch() {

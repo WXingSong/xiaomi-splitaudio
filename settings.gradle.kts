@@ -9,12 +9,12 @@ dependencyResolutionManagement {
     repositories {
         google()
         mavenCentral()
-        // JitPack serves only libadb-android and its spake2 dependency (play flavor); the fdroid flavor never resolves anything from it
+        // JitPack 仅用于提供内置无线 ADB 客户端 libadb-android 及其依赖 spake2
         exclusiveContent {
             forRepository { maven { url = uri("https://jitpack.io") } }
-            filter { includeGroupAndSubgroups("com.github.MuntashirAkon") }   // also com.github.MuntashirAkon.spake2-java
+            filter { includeGroupAndSubgroups("com.github.MuntashirAkon") }
         }
     }
 }
-rootProject.name = "splitaudio"
+rootProject.name = "xiaomi-splitaudio"
 include(":app")

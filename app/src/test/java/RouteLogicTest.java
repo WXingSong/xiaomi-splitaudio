@@ -4,48 +4,30 @@ import android.media.AudioDeviceInfo;
 import java.io.File;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
-import java.util.HashMap;
 import org.junit.Test;
 
 /**
  * Pure helpers of the routing helper (route/AppRoute.java, default package; compiled into the unit tests through
- * sourceSets["test"].java.srcDir("../route")): volume key maths, who may use the control port (token line, uid lookup in
- * /proc/net/tcp), the file readers and the multi audio focus rule. Everything that needs the audio service or a device is not
- * covered here; the control port on real sockets is in ControlChannelTest.
+ * sourceSets["test"].java.srcDir("../route")): volume maths, control port auth/commands, version reporting,
+ * Bluetooth whitelist, idle timeout and call mode helpers.
  */
 public class RouteLogicTest {
-    // ---- volume keys ----
-    @Test public void volStep_aboutFifteenStepsWhateverTheRange() {
-        assertEquals(1, AppRoute.volStep(0, 15));      // AOSP: 15 index steps
-        assertEquals(10, AppRoute.volStep(0, 150));    // Xiaomi 15: the old fixed step
-        assertEquals(7, AppRoute.volStep(0, 100));
-        assertEquals(2, AppRoute.volStep(0, 25));
-        assertEquals(2, AppRoute.volStep(0, 30));
-        assertEquals(1, AppRoute.volStep(1, 15));      // a stream whose minimum is 1
-    }
-
-    @Test public void volStep_neverBelowOne() {
-        assertEquals(1, AppRoute.volStep(0, 7));
-        assertEquals(1, AppRoute.volStep(0, 1));
-        assertEquals(1, AppRoute.volStep(0, 0));
-    }
-
-    @Test public void clampIdx_movesByOneStepAndStaysInRange() {
-        assertEquals(85, AppRoute.clampIdx(75, 10, true, 0, 150));
-        assertEquals(65, AppRoute.clampIdx(75, 10, false, 0, 150));
-        assertEquals(150, AppRoute.clampIdx(145, 10, true, 0, 150));
-        assertEquals(150, AppRoute.clampIdx(150, 10, true, 0, 150));
-        assertEquals(0, AppRoute.clampIdx(5, 10, false, 0, 150));
-        assertEquals(0, AppRoute.clampIdx(0, 1, false, 0, 15));
-        assertEquals(1, AppRoute.clampIdx(1, 1, false, 1, 15));   // minimum 1 is respected
-    }
-
+    // ---- volume percentage conversion ----
     @Test public void percent_isRelativeToTheMaximum() {
         assertEquals(50, AppRoute.percent(75, 150));
         assertEquals(100, AppRoute.percent(150, 150));
         assertEquals(0, AppRoute.percent(0, 150));
-        assertEquals(6, AppRoute.percent(1, 15));
+        assertEquals(7, AppRoute.percent(1, 15));
         assertEquals(0, AppRoute.percent(5, 0));       // unknown maximum: never divide by zero
+    }
+
+    @Test public void idxForPercent_mapsAccuratelyAndClamps() {
+        assertEquals(0, AppRoute.idxForPercent(0, 0, 150));
+        assertEquals(75, AppRoute.idxForPercent(50, 0, 150));
+        assertEquals(150, AppRoute.idxForPercent(100, 0, 150));
+        assertEquals(0, AppRoute.idxForPercent(-20, 0, 150));
+        assertEquals(150, AppRoute.idxForPercent(150, 0, 150));
+        assertEquals(8, AppRoute.idxForPercent(50, 1, 15));
     }
 
     // ---- control port access: who ----
@@ -88,14 +70,23 @@ public class RouteLogicTest {
         assertEquals("err", AppRoute.volCmd(""));
         assertEquals("err", AppRoute.volCmd("vol"));
         assertEquals("err", AppRoute.volCmd("vol up"));
-        assertEquals("err", AppRoute.volCmd("vol sideways com.a"));   // only up / down move the volume
+        assertEquals("err", AppRoute.volCmd("vol set"));
+        assertEquals("err", AppRoute.volCmd("vol set abc"));
+        assertEquals("err", AppRoute.volCmd("vol set 101"));
+        assertEquals("err", AppRoute.volCmd("vol set -1"));
+        assertEquals("err", AppRoute.volCmd("vol sideways com.a"));   // only up / down / get / set
         assertEquals("err", AppRoute.volCmd("reboot"));
     }
 
-    @Test public void controlCommands_stateAndModeWithoutARule() {
+    @Test public void controlCommands_stateModeAndVerWithoutARule() {
+        AppRoute.paused = false;
+        AppRoute.runningVer = "";
         assertEquals("off", AppRoute.volCmd("state"));    // no audio policy registered in a test
         assertEquals("legacy", AppRoute.volCmd("mode"));
-        assertEquals("pass", AppRoute.volCmd("vol up com.a"));   // rule off: the keys are left alone
+        assertEquals("unknown", AppRoute.volCmd("ver"));
+        AppRoute.runningVer = "deadbeef";
+        assertEquals("deadbeef", AppRoute.volCmd("ver"));
+        AppRoute.runningVer = "";
     }
 
     // ---- control port access: the token ----
@@ -267,72 +258,28 @@ public class RouteLogicTest {
         assertNull(AppRoute.readLineLimited(new java.io.ByteArrayInputStream("no newline".getBytes(StandardCharsets.UTF_8)), 512));           // cut off
     }
 
-    // ---- multi audio focus: only after the user agreed ----
-    @Test public void mfShouldEnable_onlyAfterAgreementAndNotDeclinedAndNotAlreadyOn() {
-        assertTrue(AppRoute.mfShouldEnable(true, false, false));
-        assertFalse(AppRoute.mfShouldEnable(false, false, false));   // never asked / not agreed
-        assertFalse(AppRoute.mfShouldEnable(false, true, false));    // declined
-        assertFalse(AppRoute.mfShouldEnable(true, true, false));     // both files: declined wins
-        assertFalse(AppRoute.mfShouldEnable(true, false, true));     // already on
-        assertFalse(AppRoute.mfShouldEnable(false, false, true));
-        assertFalse(AppRoute.mfShouldEnable(false, true, true));
-        assertFalse(AppRoute.mfShouldEnable(true, true, true));
+    // ---- call mode distinction: cellular phone calls vs WeChat VoIP ----
+    @Test public void callModes_distinguishPhoneCallsFromVoip() {
+        assertFalse(AppRoute.isPhoneCallMode(0));   // NORMAL
+        assertTrue(AppRoute.isPhoneCallMode(1));    // RINGTONE
+        assertTrue(AppRoute.isPhoneCallMode(2));    // IN_CALL
+        assertFalse(AppRoute.isPhoneCallMode(3));   // IN_COMMUNICATION (WeChat voice/video)
+        assertTrue(AppRoute.isVoipMode(3));
+        assertFalse(AppRoute.isVoipMode(0));
+        assertFalse(AppRoute.isVoipMode(2));
     }
 
-    // ---- voice typing / assistant: "mic doesn't pause the music" ----
-    @Test public void diagFocusLine_namesTheRequest() {
-        assertEquals("  focus com.spotify.music gain loss=0", AppRoute.diagFocusLine("com.spotify.music", 1, "0"));
-        assertEquals("  focus a.b transient loss=-2", AppRoute.diagFocusLine("a.b", 2, "-2"));
-        assertEquals("  focus a.b transient-may-duck loss=?", AppRoute.diagFocusLine("a.b", 3, "?"));
-        assertEquals("  focus a.b transient-exclusive loss=0", AppRoute.diagFocusLine("a.b", 4, "0"));
-        assertEquals("  focus a.b gain9 loss=0", AppRoute.diagFocusLine("a.b", 9, "0"));
-    }
-
-    @Test public void holderCounts_onlyOnceAndOnlyWhenItUsesAudio() {
-        // (holder there, uses audio, already handled)
-        assertFalse(AppRoute.holderCounts(false, false, false));
-        assertFalse(AppRoute.holderCounts(false, true, false));
-        assertFalse(AppRoute.holderCounts(true, false, false));    // an equalizer: holds the focus, no sound and no mic
-        assertTrue(AppRoute.holderCounts(true, true, false));      // voice typing, an assistant talking
-        assertFalse(AppRoute.holderCounts(true, true, true));      // counted once, not on every tick
-    }
-
-    @Test public void voiceSource_captureAndWakeWordDoNotCount() {
-        assertTrue(AppRoute.isVoiceSource(1));       // MIC
-        assertTrue(AppRoute.isVoiceSource(6));       // VOICE_RECOGNITION
-        assertTrue(AppRoute.isVoiceSource(7));       // VOICE_COMMUNICATION
-        assertFalse(AppRoute.isVoiceSource(8));      // REMOTE_SUBMIX
-        assertFalse(AppRoute.isVoiceSource(1999));   // HOTWORD
-    }
-
-    @Test public void micAction_truthTable() {
-        // (newHolder, playedBefore, keepOn) -> 0 = nothing, 1 = only arm (press play once the holder is gone), 2 = press play at once and arm
-        assertEquals(0, AppRoute.micAction(false, false, false));
-        assertEquals(0, AppRoute.micAction(false, false, true));
-        assertEquals(0, AppRoute.micAction(false, true, false));    // the holder was already there on the last tick: never twice for one holder
-        assertEquals(0, AppRoute.micAction(false, true, true));
-        assertEquals(0, AppRoute.micAction(true, false, false));    // the music was not playing before it showed up: nothing to bring back
-        assertEquals(0, AppRoute.micAction(true, false, true));
-        assertEquals(1, AppRoute.micAction(true, true, false));     // feature off (or multi audio focus off): the old behaviour
-        assertEquals(2, AppRoute.micAction(true, true, true));
-    }
-
-    @Test public void micKeepOn_aFlagFileMeansOff() throws Exception {
-        File f = File.createTempFile("approute", ".nomickeep");
-        f.deleteOnExit();
-        assertFalse(AppRoute.micKeepOn(f));                          // file there = the user turned it off
-        assertTrue(f.delete());
-        assertTrue(AppRoute.micKeepOn(f));                           // no file = on (the default)
-        assertTrue(AppRoute.micKeepOn(new File("/nonexistent/approute.nomickeep")));
-    }
-
-    @Test public void micKeepFlag_isTheFileApprouteShWrites() throws Exception {
-        assertEquals("/data/local/tmp/approute.nomickeep", AppRoute.NO_MICKEEP);
-        File sh = null;
-        for (String p : new String[] {"src/main/assets/approute.sh", "app/src/main/assets/approute.sh"}) if (new File(p).exists()) { sh = new File(p); break; }
-        assertNotNull("approute.sh not found", sh);
-        String text = new String(Files.readAllBytes(sh.toPath()), StandardCharsets.UTF_8);
-        assertTrue(text.contains("D=/data/local/tmp;") && text.contains("$D/approute.nomickeep"));   // same directory, same file name as the router looks at
+    // ---- standby sleep pause / resume control commands ----
+    @Test public void controlCommands_pauseAndResumeToggleStandbyState() {
+        AppRoute.paused = false;
+        assertEquals("off", AppRoute.volCmd("state"));
+        assertEquals("ok", AppRoute.volCmd("pause"));
+        assertEquals("paused", AppRoute.volCmd("state"));
+        assertEquals("ok", AppRoute.volCmd("resume"));
+        assertEquals("off", AppRoute.volCmd("state"));
+        assertEquals("err", AppRoute.volCmd("setidle -1"));
+        assertEquals("err", AppRoute.volCmd("setidle 2000"));
+        assertEquals("err", AppRoute.volCmd("setbt !!!not_base64!!!"));
     }
 
     // ---- files written by the app (through approute.sh) ----
@@ -343,54 +290,37 @@ public class RouteLogicTest {
         return f;
     }
 
-    @Test public void readVol_parsesVolumesAndSkipsJunk() throws Exception {
-        HashMap<Integer, Float> m = AppRoute.readVol(temp(
-            "10001=0.35\n10002=0\n10003=1.0\n10004=abc\n=0.5\n10005=1.5\n10006 = 0.5\nnonsense\n10007=-3\n"));
-        assertEquals(0.35f, m.get(10001).floatValue(), 1e-6f);
-        assertEquals(0f, m.get(10002).floatValue(), 0f);          // 0 = mute
-        assertEquals(0.5f, m.get(10006).floatValue(), 1e-6f);     // spaces around the number are fine
-        assertEquals(0f, m.get(10007).floatValue(), 0f);          // below 0 is clamped
-        assertFalse(m.containsKey(10003));                        // 100 % = left alone
-        assertFalse(m.containsKey(10005));                        // above 1 is clamped to 100 % = left alone
-        assertFalse(m.containsKey(10004));
-        assertEquals(4, m.size());
+    @Test public void readFirstLine_trimsAndHandlesMissing() throws Exception {
+        assertEquals("abc123", AppRoute.readFirstLine(temp("  abc123 \nsecond\n")));
+        assertEquals("", AppRoute.readFirstLine(temp("")));
+        assertEquals("", AppRoute.readFirstLine(new File("/nonexistent/approute.ver")));
     }
 
-    @Test public void readVol_missingFile_isEmpty() {
-        assertTrue(AppRoute.readVol(new File("/nonexistent/approute.vol")).isEmpty());
+    @Test public void btFilter_matchesSpeakerAndRejectsHeadphones() throws Exception {
+        java.util.List<AppRoute.BtEntry> filter = AppRoute.readBtFilter(temp("aa:bb:cc:dd:ee:ff|Living Room Speaker\n|Bedroom Speaker\n\n"));
+        assertEquals(2, filter.size());
+        assertTrue(AppRoute.matchesBtFilter(filter, "AA:BB:CC:DD:EE:FF", "Renamed Speaker"));  // MAC match wins even if renamed
+        assertFalse(AppRoute.matchesBtFilter(filter, "11:22:33:44:55:66", "Xiaomi Buds 5"));   // headphones rejected
+        assertTrue(AppRoute.matchesBtFilter(filter, "02:00:00:00:00:00", "Bedroom Speaker"));  // placeholder MAC falls back to name
+        assertTrue(AppRoute.matchesBtFilter(java.util.Collections.emptyList(), "11:22:33:44:55:66", "Anything")); // empty = allow all
     }
 
-    @Test public void readMap_parsesTargetsAndSpeakerUids() throws Exception {
-        AppRoute.readMap(temp("speaker:10001,10002\nbt:10003\nwired:abc,10005,\nbogus:10006\n:7\nnocolon\nspeaker:\n"));
-        assertArrayEquals(new int[] {10001, 10002}, AppRoute.map.get("speaker"));
-        assertArrayEquals(new int[] {10003}, AppRoute.map.get("bt"));
-        assertArrayEquals(new int[] {10005}, AppRoute.map.get("wired"));
-        assertFalse(AppRoute.map.containsKey("bogus"));
-        assertEquals(3, AppRoute.map.size());
-        // volume keys: only the speaker-routed apps are "routed"
-        assertTrue(AppRoute.routed.contains(10001));
-        assertTrue(AppRoute.routed.contains(10002));
-        assertFalse(AppRoute.routed.contains(10003));
-        assertEquals(2, AppRoute.routed.size());
+    @Test public void idleTimeout_supportsDisableAndCustomMinutes() throws Exception {
+        assertEquals(AppRoute.DEFAULT_IDLE_MINUTES, AppRoute.readIdleMinutes(new File("/nonexistent/approute.idle")));
+        assertEquals(0, AppRoute.readIdleMinutes(temp("0\n")));
+        assertEquals(15, AppRoute.readIdleMinutes(temp(" 15 \n")));
+        assertEquals(0, AppRoute.readIdleMinutes(temp("-5\n")));
+        assertEquals(1440, AppRoute.readIdleMinutes(temp("9999\n")));
+        assertFalse(AppRoute.shouldExitOnIdle(0, 10_000_000L, 0L));           // 0 = disabled
+        assertFalse(AppRoute.shouldExitOnIdle(2, 119_999L, 0L));
+        assertTrue(AppRoute.shouldExitOnIdle(2, 120_000L, 0L));
     }
 
-    @Test public void readMap_isRebuiltFromScratchEachTime() throws Exception {
-        AppRoute.readMap(temp("speaker:10001\nbt:10002\n"));
-        AppRoute.readMap(temp("bt:10009\n"));
-        assertEquals(1, AppRoute.map.size());
-        assertArrayEquals(new int[] {10009}, AppRoute.map.get("bt"));
-        assertTrue(AppRoute.routed.isEmpty());
-    }
-
-    @Test public void target_mapsDeviceTypes() {
-        assertEquals("speaker", AppRoute.target(AudioDeviceInfo.TYPE_BUILTIN_SPEAKER));
-        assertEquals("bt", AppRoute.target(AudioDeviceInfo.TYPE_BLUETOOTH_A2DP));
-        assertEquals("bt", AppRoute.target(26));   // BLE headset
-        assertEquals("bt", AppRoute.target(27));   // BLE speaker
-        assertEquals("wired", AppRoute.target(AudioDeviceInfo.TYPE_WIRED_HEADSET));
-        assertEquals("wired", AppRoute.target(AudioDeviceInfo.TYPE_WIRED_HEADPHONES));
-        assertEquals("wired", AppRoute.target(AudioDeviceInfo.TYPE_USB_HEADSET));
-        assertEquals("wired", AppRoute.target(AudioDeviceInfo.TYPE_USB_DEVICE));
-        assertNull(AppRoute.target(AudioDeviceInfo.TYPE_BUILTIN_EARPIECE));
+    @Test public void isBtOutputType_recognisesA2dpAndBle() {
+        assertTrue(AppRoute.isBtOutputType(AudioDeviceInfo.TYPE_BLUETOOTH_A2DP));
+        assertTrue(AppRoute.isBtOutputType(26));
+        assertTrue(AppRoute.isBtOutputType(27));
+        assertFalse(AppRoute.isBtOutputType(AudioDeviceInfo.TYPE_BUILTIN_SPEAKER));
+        assertFalse(AppRoute.isBtOutputType(AudioDeviceInfo.TYPE_WIRED_HEADSET));
     }
 }
